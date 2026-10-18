@@ -67,8 +67,10 @@ jobs:
     steps:
       - name: Deploy API to production
         run: |
-          git -C /opt/crossfit/crossfit-deploy pull --ff-only
-          cd /opt/crossfit/crossfit-deploy
-          API_IMAGE="ghcr.io/quiquesancho/crossfit-api:v${{ needs.release.outputs.version }}" \
-          docker compose --env-file /opt/crossfit/production/.env \
-            -f environments/production/docker-compose.yml up -d --pull always api
+          flock /opt/crossfit/crossfit-deploy/.deploy.lock bash -ceu '
+            git -C /opt/crossfit/crossfit-deploy pull --ff-only
+            cd /opt/crossfit/crossfit-deploy
+            API_IMAGE="ghcr.io/quiquesancho/crossfit-api:v${{ needs.release.outputs.version }}" \
+            docker compose --env-file /opt/crossfit/production/.env \
+              -f environments/production/docker-compose.yml up -d --pull always api
+          '
