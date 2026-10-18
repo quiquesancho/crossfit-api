@@ -1,7 +1,7 @@
 import { boolean, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const catalog = pgTable("catalog", {
-  id: uuid("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   key: text("key").notNull().unique(),
   description: text("description").notNull(),
 });
@@ -9,7 +9,7 @@ export const catalog = pgTable("catalog", {
 export const catalogEntry = pgTable(
   "catalog_entry",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().defaultRandom(),
     catalogId: uuid("catalog_id").notNull().references(() => catalog.id),
     code: text("code").notNull(),
     description: text("description").notNull(),
@@ -22,7 +22,7 @@ export const catalogEntry = pgTable(
 );
 
 export const movementFamily = pgTable("movement_family", {
-  id: uuid("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -30,7 +30,7 @@ export const movementFamily = pgTable("movement_family", {
 });
 
 export const movement = pgTable("movement", {
-  id: uuid("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   code: text("code").notNull().unique(),
   familyId: uuid("family_id").notNull().references(() => movementFamily.id),
   name: text("name").notNull(),
