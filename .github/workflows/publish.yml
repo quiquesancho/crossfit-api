@@ -5,7 +5,6 @@ on:
     branches: [main]
   push:
     branches: [main]
-    tags: ["v*"]
 
 permissions:
   contents: read
@@ -34,8 +33,6 @@ jobs:
             type=ref,event=pr
             type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,prefix=sha-,format=short
-            type=semver,pattern=v{{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
