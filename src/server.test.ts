@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
-import { createCatalogReader } from "./catalogs.js";
+import { createCatalogReader } from "./modules/catalog/catalog.repository.js";
 import type { Database } from "./db/client.js";
 
 const app = buildApp();

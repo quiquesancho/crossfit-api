@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 
-import type { Database } from "./db/client.js";
-import { catalog, catalogEntry, movement, movementFamily } from "./db/schema.js";
+import type { Database } from "../../db/client.js";
+import { catalog, catalogEntry, movement, movementFamily } from "../../db/schema.js";
 
 export function createCatalogReader(database: Database) {
   return {
