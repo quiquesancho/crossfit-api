@@ -54,7 +54,7 @@ jobs:
           flock /opt/crossfit/crossfit-deploy/.deploy.lock bash -ceu '
             git -C /opt/crossfit/crossfit-deploy pull --ff-only
             cd /opt/crossfit/crossfit-deploy
-            API_IMAGE="ghcr.io/quiquesancho/crossfit-api:sha-${GITHUB_SHA:0:7}" \
+            sed -i "s|^API_IMAGE=.*|API_IMAGE=ghcr.io/quiquesancho/crossfit-api:sha-${GITHUB_SHA:0:7}|" /opt/crossfit/preproduction/.env
             docker compose --env-file /opt/crossfit/preproduction/.env \
-              -f environments/preproduction/docker-compose.yml up -d --pull always api
+              -f environments/preproduction/docker-compose.yml up -d --pull always
           '
