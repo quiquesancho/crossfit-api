@@ -18,5 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - uses: cycjimmy/semantic-release-action@v4
+        with:
+          extra_plugins: |
+            conventional-changelog-conventionalcommits
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
