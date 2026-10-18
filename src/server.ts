@@ -1,8 +1,9 @@
 import { buildApp } from "./app.js";
-import { createCatalogReader } from "./catalogs.js";
+import { loadConfig } from "./config/env.js";
 import { createDatabase } from "./db/client.js";
+import { createCatalogReader } from "./modules/catalog/catalog.repository.js";
 
-const databaseUrl = process.env.DATABASE_URL;
-const app = buildApp(databaseUrl ? { catalogReader: createCatalogReader(createDatabase(databaseUrl)) } : undefined);
+const config = loadConfig();
+const app = buildApp(config.databaseUrl ? { catalogReader: createCatalogReader(createDatabase(config.databaseUrl)) } : undefined);
 
-await app.listen({ host: "0.0.0.0", port: 3000 });
+await app.listen({ host: config.host, port: config.port });
