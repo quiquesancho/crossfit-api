@@ -5,8 +5,9 @@ import { catalog, catalogEntry, movement, movementFamily } from "./schema.js";
 
 const ids = {
   blockType: "019b4e0a-0000-7000-8000-000000000001",
-  calentamiento: "019b4e0a-0000-7000-8000-000000000002",
-  fuerza: "019b4e0a-0000-7000-8000-000000000003",
+  warmup: "019b4e0a-0000-7000-8000-000000000002",
+  strength: "019b4e0a-0000-7000-8000-000000000003",
+  technique: "019b4e0a-0000-7000-8000-000000000007",
   wod: "019b4e0a-0000-7000-8000-000000000004",
   clean: "019b4e0a-0000-7000-8000-000000000005",
   powerClean: "019b4e0a-0000-7000-8000-000000000006",
@@ -27,9 +28,10 @@ await database
 await database
   .insert(catalogEntry)
   .values([
-    { id: ids.calentamiento, catalogId: ids.blockType, code: "calentamiento", description: "Calentamiento", displayOrder: 1 },
-    { id: ids.fuerza, catalogId: ids.blockType, code: "fuerza", description: "Fuerza y técnica", displayOrder: 2 },
-    { id: ids.wod, catalogId: ids.blockType, code: "wod", description: "WOD", displayOrder: 3 },
+    { id: ids.warmup, catalogId: ids.blockType, code: "warmup", description: "Calentamiento", displayOrder: 1 },
+    { id: ids.technique, catalogId: ids.blockType, code: "technique", description: "Técnica", displayOrder: 2 },
+    { id: ids.strength, catalogId: ids.blockType, code: "strength", description: "Fuerza", displayOrder: 3 },
+    { id: ids.wod, catalogId: ids.blockType, code: "wod", description: "WOD", displayOrder: 4 },
   ])
   .onConflictDoUpdate({
     target: catalogEntry.id,
