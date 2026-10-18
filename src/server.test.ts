@@ -1,5 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
+import { createCatalogReader } from "./catalogs.js";
+import type { Database } from "./db/client.js";
 
 const app = buildApp();
 
@@ -34,5 +36,33 @@ describe("catalog endpoints", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ movements: await catalogReader.listMovements() });
+  });
+});
+
+describe("catalog reader", () => {
+  it("maps catalog entries from the database query", async () => {
+    const rows = [{ id: "catalog-entry-id", code: "warmup", description: "Warm-up", displayOrder: 1 }];
+    const query = {
+      from: () => query,
+      innerJoin: () => query,
+      where: () => query,
+      orderBy: async () => rows,
+    };
+    const reader = createCatalogReader({ select: () => query } as unknown as Database);
+
+    await expect(reader.listEntries("block-type")).resolves.toEqual(rows);
+  });
+
+  it("maps movements from the database query", async () => {
+    const rows = [{ code: "power-clean", name: "Power clean", familyCode: "clean" }];
+    const query = {
+      from: () => query,
+      innerJoin: () => query,
+      where: () => query,
+      orderBy: async () => rows,
+    };
+    const reader = createCatalogReader({ select: () => query } as unknown as Database);
+
+    await expect(reader.listMovements()).resolves.toEqual(rows);
   });
 });
