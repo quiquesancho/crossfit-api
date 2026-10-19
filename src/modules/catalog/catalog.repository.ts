@@ -20,7 +20,7 @@ export function createCatalogReader(database: Database) {
     },
     async listMovements() {
       return database
-        .select({ code: movement.code, name: movement.name, familyCode: movementFamily.code })
+        .select({ id: movement.id, code: movement.code, name: movement.name, familyCode: movementFamily.code })
         .from(movement)
         .innerJoin(movementFamily, eq(movement.familyId, movementFamily.id))
         .where(and(isNull(movement.archivedAt), isNull(movementFamily.archivedAt)))

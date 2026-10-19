@@ -197,8 +197,9 @@ components:
   schemas:
     Movement:
       type: object
-      required: [code, name, familyCode]
+      required: [id, code, name, familyCode]
       properties:
+        id: { type: string, format: uuid }
         code: { type: string, example: power-clean }
         name: { type: string, example: Power clean }
         familyCode: { type: string, example: clean }
@@ -207,7 +208,7 @@ components:
       required: [id, code, description]
       properties:
         id: { type: string, format: uuid }
-        code: { type: string, example: fuerza }
+        code: { type: string, example: strength }
         description: { type: string, example: Trabajo de fuerza }
         displayOrder: { type: integer }
     CalendarDay:
