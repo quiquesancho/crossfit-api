@@ -43,18 +43,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  deploy-preproduction:
-    needs: image
-    if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
-    runs-on: [self-hosted, raspberrypi, preproduction]
-    steps:
-      - name: Deploy API to preproduction
-        run: |
-          flock /opt/crossfit/crossfit-deploy/.deploy.lock bash -ceu '
-            git -C /opt/crossfit/crossfit-deploy pull --ff-only
-            cd /opt/crossfit/crossfit-deploy
-            sed -i "s|^API_IMAGE=.*|API_IMAGE=ghcr.io/quiquesancho/crossfit-api:sha-${GITHUB_SHA:0:7}|" /opt/crossfit/preproduction/.env
-            docker compose --env-file /opt/crossfit/preproduction/.env \
-              -f environments/preproduction/docker-compose.yml up -d --pull always
-          '

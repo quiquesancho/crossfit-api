@@ -1,4 +1,4 @@
-name: Deploy branch to preproduction
+name: Deploy ref to preproduction
 
 on:
   workflow_dispatch:
