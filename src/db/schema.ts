@@ -1,5 +1,15 @@
 import { boolean, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
+export const athlete = pgTable("athlete", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileKey: text("profile_key").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  timezone: text("timezone").notNull().default("Europe/Madrid"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const catalog = pgTable("catalog", {
   id: uuid("id").primaryKey().defaultRandom(),
   key: text("key").notNull().unique(),

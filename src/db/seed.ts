@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { createDatabase } from "./client.js";
-import { catalog, catalogEntry, movement, movementFamily } from "./schema.js";
+import { athlete, catalog, catalogEntry, movement, movementFamily } from "./schema.js";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -10,6 +10,25 @@ if (!connectionString) {
 }
 
 const database = createDatabase(connectionString);
+const athleteDisplayName = (process.env.ATHLETE_DISPLAY_NAME ?? "Atleta").trim();
+const athleteTimezone = (process.env.ATHLETE_TIMEZONE ?? "Europe/Madrid").trim();
+
+if (!athleteDisplayName || !athleteTimezone) {
+  throw new Error("ATHLETE_DISPLAY_NAME and ATHLETE_TIMEZONE cannot be empty.");
+}
+
+await database
+  .insert(athlete)
+  .values({ profileKey: "local", displayName: athleteDisplayName, timezone: athleteTimezone })
+  .onConflictDoUpdate({
+    target: athlete.profileKey,
+    set: {
+      displayName: sql`excluded.display_name`,
+      timezone: sql`excluded.timezone`,
+      active: true,
+      updatedAt: sql`now()`,
+    },
+  });
 
 const [blockType] = await database
   .insert(catalog)
