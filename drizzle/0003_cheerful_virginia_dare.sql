@@ -33,6 +33,7 @@ CREATE TABLE "plan_version" (
 	"training_plan_id" uuid NOT NULL,
 	"version_number" integer NOT NULL,
 	"source_version" text,
+	"source_hash" text,
 	"status" text NOT NULL,
 	"published_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -122,4 +123,4 @@ CREATE UNIQUE INDEX "planned_week_version_position_idx" ON "planned_week" USING 
 CREATE UNIQUE INDEX "planned_week_version_start_idx" ON "planned_week" USING btree ("plan_version_id","week_start");--> statement-breakpoint
 CREATE UNIQUE INDEX "prescription_block_position_idx" ON "prescription" USING btree ("planned_block_id","position");--> statement-breakpoint
 CREATE INDEX "training_plan_owner_idx" ON "training_plan" USING btree ("owner_athlete_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "training_plan_external_source_id_idx" ON "training_plan" USING btree ("external_source","external_id") WHERE "training_plan"."external_source" is not null and "training_plan"."external_id" is not null;
+CREATE UNIQUE INDEX "training_plan_external_source_id_idx" ON "training_plan" USING btree ("owner_athlete_id","external_source","external_id") WHERE "training_plan"."external_source" is not null and "training_plan"."external_id" is not null;

@@ -1,5 +1,5 @@
 {
-  "id": "7b84381b-20a3-45dc-a950-02073f4e717e",
+  "id": "c3f9f39b-ee47-4d51-a231-d978e24cf06a",
   "prevId": "f7a83edb-14b2-4e00-af41-e14fdf56d521",
   "version": "7",
   "dialect": "postgresql",
@@ -615,6 +615,12 @@
         },
         "source_version": {
           "name": "source_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_hash": {
+          "name": "source_hash",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1269,6 +1275,12 @@
         "training_plan_external_source_id_idx": {
           "name": "training_plan_external_source_id_idx",
           "columns": [
+            {
+              "expression": "owner_athlete_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
             {
               "expression": "external_source",
               "isExpression": false,

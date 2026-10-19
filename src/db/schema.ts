@@ -117,7 +117,7 @@ export const trainingPlan = pgTable(
   (table) => [
     index("training_plan_owner_idx").on(table.ownerAthleteId),
     uniqueIndex("training_plan_external_source_id_idx")
-      .on(table.externalSource, table.externalId)
+      .on(table.ownerAthleteId, table.externalSource, table.externalId)
       .where(sql`${table.externalSource} is not null and ${table.externalId} is not null`),
   ],
 );
