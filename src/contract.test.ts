@@ -14,7 +14,16 @@ const contract = parse(
   readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../openapi.yaml"), "utf8"),
 ) as {
   openapi: string;
-  paths: Record<string, Record<string, { responses: Record<string, { content?: Record<string, { schema?: object }> }> }>>;
+  paths: Record<
+    string,
+    Record<
+      string,
+      {
+        requestBody?: { content?: Record<string, { schema?: object }> };
+        responses: Record<string, { content?: Record<string, { schema?: object }> }>;
+      }
+    >
+  >;
   components: object;
 };
 
@@ -45,6 +54,12 @@ function responseValidator(path: string, method: string, status: number): Valida
   return ajv.compile(absolutizeRefs(schema) as object);
 }
 
+function requestValidator(path: string, method: string): ValidateFunction {
+  const schema = contract.paths[path]?.[method]?.requestBody?.content?.["application/json"]?.schema;
+  if (!schema) throw new Error(`Contract has no JSON schema for ${method.toUpperCase()} ${path}`);
+  return ajv.compile(absolutizeRefs(schema) as object);
+}
+
 function expectValid(validate: ValidateFunction, payload: unknown) {
   const valid = validate(payload);
   expect(validate.errors ?? []).toEqual([]);
@@ -57,6 +72,37 @@ const catalogReader = {
   ],
   listMovements: async () => [
     { id: "019b4e0a-0000-7000-8000-000000000010", code: "power-clean", name: "Power clean", familyCode: "clean" },
+  ],
+};
+
+const planningPublisher = {
+  publish: async () => ({
+    trainingPlanId: "019b4e0a-0000-7000-8000-000000000030",
+    planVersionId: "019b4e0a-0000-7000-8000-000000000031",
+    status: "published" as const,
+  }),
+};
+
+const planningPublication = {
+  sourceVersion: "2026-W43-v1",
+  title: "Semana de prueba",
+  weeks: [
+    {
+      weekStart: "2026-10-19",
+      sessions: [
+        {
+          externalId: "session-1",
+          plannedDate: "2026-10-20",
+          title: "Sesión de prueba",
+          blocks: [
+            {
+              blockTypeId: "019b4e0a-0000-7000-8000-000000000003",
+              title: "Fuerza",
+            },
+          ],
+        },
+      ],
+    },
   ],
 };
 
@@ -85,5 +131,29 @@ describe("catalog responses conform to the contract", () => {
 
     expect(response.statusCode).toBe(200);
     expectValid(responseValidator("/catalog/movements", "get", 200), response.json());
+  });
+});
+
+describe("planning responses conform to the contract", () => {
+  const app = buildApp({ planningPublisher, openClawServiceKey: "test-secret" });
+  afterAll(async () => app.close());
+
+  it("PUT /integrations/openclaw/training-plans/{externalPlanId}", async () => {
+    expectValid(
+      requestValidator("/integrations/openclaw/training-plans/{externalPlanId}", "put"),
+      planningPublication,
+    );
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/v1/integrations/openclaw/training-plans/plan-1",
+      headers: { "x-openclaw-service-key": "test-secret" },
+      payload: planningPublication,
+    });
+
+    expect(response.statusCode).toBe(201);
+    expectValid(
+      responseValidator("/integrations/openclaw/training-plans/{externalPlanId}", "put", 201),
+      response.json(),
+    );
   });
 });

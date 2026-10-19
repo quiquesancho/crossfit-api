@@ -1,5 +1,6 @@
 export type AppConfig = {
   databaseUrl?: string;
+  openClawServiceKey?: string;
   host: string;
   port: number;
 };
@@ -11,5 +12,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error("PORT must be an integer between 1 and 65535.");
   }
 
-  return { databaseUrl: env.DATABASE_URL, host: env.HOST ?? "0.0.0.0", port };
+  return {
+    databaseUrl: env.DATABASE_URL,
+    openClawServiceKey: env.OPENCLAW_SERVICE_KEY,
+    host: env.HOST ?? "0.0.0.0",
+    port,
+  };
 }
