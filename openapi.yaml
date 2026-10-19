@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: CrossFit Training API
   version: 0.1.0
-  description: Contract-first API for the CrossFit training application. Human-readable companion: `Contrato OpenAPI.md`.
+  description: 'Contract-first API for the CrossFit training application. Human-readable companion: `Contrato OpenAPI.md`.'
 servers:
   - url: https://crossfit.local/api/v1
 paths:
