@@ -18,7 +18,9 @@ describe("health endpoint", () => {
 describe("catalog endpoints", () => {
   const catalogReader = {
     listEntries: async () => [{ id: "catalog-entry-id", code: "warmup", description: "Warm-up", displayOrder: 1 }],
-    listMovements: async () => [{ code: "power-clean", name: "Power clean", familyCode: "clean" }],
+    listMovements: async () => [
+      { id: "019b4e0a-0000-7000-8000-000000000010", code: "power-clean", name: "Power clean", familyCode: "clean" },
+    ],
   };
   const catalogApp = buildApp({ catalogReader });
 
@@ -54,7 +56,9 @@ describe("catalog reader", () => {
   });
 
   it("maps movements from the database query", async () => {
-    const rows = [{ code: "power-clean", name: "Power clean", familyCode: "clean" }];
+    const rows = [
+      { id: "019b4e0a-0000-7000-8000-000000000010", code: "power-clean", name: "Power clean", familyCode: "clean" },
+    ];
     const query = {
       from: () => query,
       innerJoin: () => query,

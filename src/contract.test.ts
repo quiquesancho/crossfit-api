@@ -55,7 +55,9 @@ const catalogReader = {
   listEntries: async () => [
     { id: "019b4e0a-0000-7000-8000-000000000002", code: "warmup", description: "Warm-up", displayOrder: 1 },
   ],
-  listMovements: async () => [{ code: "power-clean", name: "Power clean", familyCode: "clean" }],
+  listMovements: async () => [
+    { id: "019b4e0a-0000-7000-8000-000000000010", code: "power-clean", name: "Power clean", familyCode: "clean" },
+  ],
 };
 
 describe("openapi contract document", () => {
