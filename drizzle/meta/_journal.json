@@ -29,6 +29,13 @@
       "when": 1792445522244,
       "tag": "0003_fixed_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792445632509,
+      "tag": "0004_pink_millenium_guard",
+      "breakpoints": true
     }
   ]
 }

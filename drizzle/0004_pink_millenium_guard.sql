@@ -1,0 +1,1 @@
+ALTER TABLE "plan_version" ADD COLUMN "source_hash" text;

@@ -129,6 +129,7 @@ export const planVersion = pgTable(
     trainingPlanId: uuid("training_plan_id").notNull().references(() => trainingPlan.id),
     versionNumber: integer("version_number").notNull(),
     sourceVersion: text("source_version"),
+    sourceHash: text("source_hash"),
     status: text("status").notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
