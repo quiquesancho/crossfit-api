@@ -66,6 +66,19 @@ function addRpeIssue(issues: ValidationIssue[], value: unknown, path: string) {
   }
 }
 
+function validatePrescribedWeight(value: unknown, path: string, issues: ValidationIssue[]) {
+  if (!isObject(value)) {
+    issues.push({ path, message: "Must be an object." });
+    return;
+  }
+  if (typeof value.amount !== "number" || !Number.isFinite(value.amount) || value.amount <= 0) {
+    issues.push({ path: `${path}.amount`, message: "Must be a positive number." });
+  }
+  if (!isNonEmptyString(value.unit)) {
+    issues.push({ path: `${path}.unit`, message: "Must be a non-empty string." });
+  }
+}
+
 function validatePrescription(value: unknown, path: string, issues: ValidationIssue[]): value is PlanningPrescription {
   if (!isObject(value)) {
     issues.push({ path, message: "Must be an object." });
@@ -84,7 +97,21 @@ function validatePrescription(value: unknown, path: string, issues: ValidationIs
   if (value.movementId !== undefined && value.complexVersionId !== undefined) {
     issues.push({ path, message: "Cannot reference both a movement and a complex version." });
   }
-  if (value.details !== undefined && !isObject(value.details)) {
+  if (isObject(value.details)) {
+    if (value.details.prescribedWeight !== undefined) {
+      validatePrescribedWeight(
+        value.details.prescribedWeight,
+        `${path}.details.prescribedWeight`,
+        issues,
+      );
+    }
+    if (value.details.weightUnit !== undefined && !isNonEmptyString(value.details.weightUnit)) {
+      issues.push({
+        path: `${path}.details.weightUnit`,
+        message: "Must be a non-empty string.",
+      });
+    }
+  } else if (value.details !== undefined) {
     issues.push({ path: `${path}.details`, message: "Must be an object." });
   }
   addStringIssue(issues, value.notes, `${path}.notes`);

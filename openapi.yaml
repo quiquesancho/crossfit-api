@@ -286,7 +286,15 @@ components:
           anyOf:
             - { $ref: '#/components/schemas/ComplexReference' }
             - { type: 'null' }
-        details: { type: object, additionalProperties: true }
+        details:
+          type: object
+          additionalProperties: true
+          description: >-
+            Free-form prescription details. When an absolute load is present it is
+            published as `prescribedWeight: { amount, unit }`, keeping the quantity
+            and the unit of measure separate. `weightUnit` declares the unit used for
+            percentage-based work; `prescribedWeightKg` is accepted only as a legacy
+            fallback.
         allowsActualWeight:
           type: boolean
           description: >-
@@ -385,7 +393,13 @@ components:
                               properties:
                                 movementId: { type: string, format: uuid }
                                 complexVersionId: { type: string, format: uuid }
-                                details: { type: object, additionalProperties: true }
+                                details:
+                                  type: object
+                                  additionalProperties: true
+                                  description: >-
+                                    Free-form prescription details. Publish absolute
+                                    loads as `prescribedWeight: { amount, unit }` and
+                                    use `weightUnit` for percentage-based work.
                                 notes: { type: string }
                               not:
                                 required: [movementId, complexVersionId]

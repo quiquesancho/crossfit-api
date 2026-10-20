@@ -17,12 +17,12 @@ describe("example planning", () => {
       deadliftMovementId: "deadlift-id",
     });
 
-    expect(publication.sourceVersion).toBe("example-2026-10-19-v5");
+    expect(publication.sourceVersion).toBe("example-2026-10-19-v6");
     expect(publication.weeks[0]?.sessions[0]?.plannedDate).toBe("2026-10-20");
     expect(publication.weeks[0]?.sessions[0]?.blocks).toHaveLength(3);
     const strengthPrescription = publication.weeks[0]?.sessions[0]?.blocks[1]?.prescriptions?.[0];
     expect(strengthPrescription?.details).toEqual(
-      expect.objectContaining({ oneRepMaxPercentage: 75 }),
+      expect.objectContaining({ oneRepMaxPercentage: 75, weightUnit: "kg" }),
     );
     expect(strengthPrescription?.details).not.toEqual(
       expect.objectContaining({ prescribedWeightKg: expect.anything() }),
@@ -41,7 +41,7 @@ describe("example planning", () => {
     expect(wodPrescriptions?.[1]).toEqual(
       expect.objectContaining({
         movementId: "back-squat-id",
-        details: { repetitions: 10, prescribedWeightKg: 60 },
+        details: { repetitions: 10, prescribedWeight: { amount: 60, unit: "kg" } },
       }),
     );
     expect(wodPrescriptions?.[2]).toEqual(
@@ -49,7 +49,7 @@ describe("example planning", () => {
         movementId: "deadlift-id",
         details: {
           repetitions: 8,
-          prescribedWeightKg: 83,
+          prescribedWeight: { amount: 83, unit: "kg" },
         },
         notes: "Si no puedes con 83 kg, usa tu 55 % de 1RM.",
       }),

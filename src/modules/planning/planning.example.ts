@@ -35,7 +35,7 @@ export function createExamplePlanningPublication(
   references: ExampleReferences,
 ): PlanningPublication {
   return {
-    sourceVersion: `example-${weekStart}-v5`,
+    sourceVersion: `example-${weekStart}-v6`,
     title: "Planificación de ejemplo",
     weeks: [
       {
@@ -69,6 +69,7 @@ export function createExamplePlanningPublication(
                       sets: 5,
                       repetitions: 3,
                       oneRepMaxPercentage: 75,
+                      weightUnit: "kg",
                     },
                     notes: "Carga técnica estable. Descansar 90 segundos entre series.",
                   },
@@ -84,14 +85,14 @@ export function createExamplePlanningPublication(
                   { details: { format: "amrap", durationSeconds: 720 } },
                   {
                     movementId: references.backSquatMovementId,
-                    details: { repetitions: 10, prescribedWeightKg: 60 },
+                    details: { repetitions: 10, prescribedWeight: { amount: 60, unit: "kg" } },
                     notes: "Peso obligatorio: 60 kg.",
                   },
                   {
                     movementId: references.deadliftMovementId,
                     details: {
                       repetitions: 8,
-                      prescribedWeightKg: 83,
+                      prescribedWeight: { amount: 83, unit: "kg" },
                     },
                     notes: "Si no puedes con 83 kg, usa tu 55 % de 1RM.",
                   },
@@ -123,7 +124,7 @@ export function createExamplePlanningPublication(
                   { details: { format: "emom", intervalSeconds: 60, durationSeconds: 600 } },
                   {
                     movementId: references.powerCleanMovementId,
-                    details: { repetitions: 5, prescribedWeightKg: 50 },
+                    details: { repetitions: 5, prescribedWeight: { amount: 50, unit: "kg" } },
                     notes: "Carga ligera para mantener la técnica durante todo el EMOM.",
                   },
                 ],
@@ -138,7 +139,7 @@ export function createExamplePlanningPublication(
                   { details: { format: "for_time", timeCapSeconds: 900 } },
                   {
                     movementId: references.backSquatMovementId,
-                    details: { repetitions: 30, prescribedWeightKg: 60 },
+                    details: { repetitions: 30, prescribedWeight: { amount: 60, unit: "kg" } },
                     notes: "Peso obligatorio: 60 kg.",
                   },
                 ],
@@ -153,7 +154,7 @@ export function createExamplePlanningPublication(
                   { details: { format: "rounds_for_time", rounds: 5, timeCapSeconds: 1200 } },
                   {
                     movementId: references.deadliftMovementId,
-                    details: { repetitions: 10, prescribedWeightKg: 83 },
+                    details: { repetitions: 10, prescribedWeight: { amount: 83, unit: "kg" } },
                     notes: "Si no puedes con 83 kg, usa tu 55 % de 1RM.",
                   },
                 ],
