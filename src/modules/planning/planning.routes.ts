@@ -7,8 +7,9 @@ import {
   PlanningValidationError,
   PlanningVersionConflictError,
   type PlanningPublisher,
+  type PlanningWeekReader,
 } from "./planning.types.js";
-import { validatePlanningPublication } from "./planning.validation.js";
+import { isIsoWeekStart, validatePlanningPublication } from "./planning.validation.js";
 
 function validServiceKey(received: unknown, expected: string): boolean {
   if (typeof received !== "string") return false;
@@ -19,8 +20,31 @@ function validServiceKey(received: unknown, expected: string): boolean {
 
 export function registerPlanningRoutes(
   app: FastifyInstance,
-  dependencies: { planningPublisher?: PlanningPublisher; openClawServiceKey?: string },
+  dependencies: {
+    planningPublisher?: PlanningPublisher;
+    planningWeekReader?: PlanningWeekReader;
+    openClawServiceKey?: string;
+  },
 ) {
+  app.get<{ Params: { weekStart: string } }>("/api/v1/planning/weeks/:weekStart", async (request, reply) => {
+    if (!isIsoWeekStart(request.params.weekStart)) {
+      return reply.code(400).send({
+        code: "validation_error",
+        message: "Contract validation failed.",
+        issues: [{ path: "weekStart", message: "Must be a valid ISO date for a Monday." }],
+      });
+    }
+    if (!dependencies.planningWeekReader) {
+      return reply.code(503).send({ code: "service_unavailable", message: "Planning queries are unavailable." });
+    }
+
+    const week = await dependencies.planningWeekReader.getWeek(request.params.weekStart);
+    if (!week) {
+      return reply.code(404).send({ code: "planning_week_not_found", message: "No published planning week found." });
+    }
+    return week;
+  });
+
   app.put<{ Params: { externalPlanId: string }; Body: unknown }>(
     "/api/v1/integrations/openclaw/training-plans/:externalPlanId",
     async (request, reply) => {

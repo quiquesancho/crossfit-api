@@ -106,6 +106,58 @@ const planningPublication = {
   ],
 };
 
+const planningWeekReader = {
+  getWeek: async () => ({
+    id: "019b4e0a-0000-7000-8000-000000000040",
+    trainingPlanId: "019b4e0a-0000-7000-8000-000000000030",
+    planVersionId: "019b4e0a-0000-7000-8000-000000000031",
+    planTitle: "Semana de prueba",
+    weekStart: "2026-10-19",
+    title: "Semana 1",
+    priorities: "Fuerza y acondicionamiento",
+    sessions: [
+      {
+        id: "019b4e0a-0000-7000-8000-000000000041",
+        externalId: "session-1",
+        plannedDate: "2026-10-20",
+        title: "Fuerza y WOD",
+        objective: "Mantener una técnica sólida.",
+        durationSeconds: 3600,
+        targetRpe: 7,
+        blocks: [
+          {
+            id: "019b4e0a-0000-7000-8000-000000000042",
+            position: 1,
+            blockType: {
+              id: "019b4e0a-0000-7000-8000-000000000003",
+              code: "strength",
+              description: "Fuerza",
+            },
+            title: "Power clean",
+            instructions: null,
+            durationSeconds: 1200,
+            targetRpe: 7,
+            prescriptions: [
+              {
+                id: "019b4e0a-0000-7000-8000-000000000043",
+                position: 1,
+                movement: {
+                  id: "019b4e0a-0000-7000-8000-000000000010",
+                  code: "power-clean",
+                  name: "Power clean",
+                },
+                complex: null,
+                details: { sets: 5, repetitions: 3 },
+                notes: "Descansar 90 segundos.",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }),
+};
+
 describe("openapi contract document", () => {
   it("declares the version and the implemented paths", () => {
     expect(contract.openapi).toBe("3.1.0");
@@ -135,8 +187,15 @@ describe("catalog responses conform to the contract", () => {
 });
 
 describe("planning responses conform to the contract", () => {
-  const app = buildApp({ planningPublisher, openClawServiceKey: "test-secret" });
+  const app = buildApp({ planningPublisher, planningWeekReader, openClawServiceKey: "test-secret" });
   afterAll(async () => app.close());
+
+  it("GET /planning/weeks/{weekStart}", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/v1/planning/weeks/2026-10-19" });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(responseValidator("/planning/weeks/{weekStart}", "get", 200), response.json());
+  });
 
   it("PUT /integrations/openclaw/training-plans/{externalPlanId}", async () => {
     expectValid(

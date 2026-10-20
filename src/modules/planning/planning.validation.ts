@@ -32,7 +32,7 @@ function isRpe(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 10;
 }
 
-function isDate(value: unknown): value is string {
+export function isIsoDate(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const match = DATE_PATTERN.exec(value);
   if (!match) return false;
@@ -42,6 +42,10 @@ function isDate(value: unknown): value is string {
     date.getUTCMonth() + 1 === Number(match[2]) &&
     date.getUTCDate() === Number(match[3])
   );
+}
+
+export function isIsoWeekStart(value: unknown): value is string {
+  return isIsoDate(value) && new Date(`${value}T00:00:00Z`).getUTCDay() === 1;
 }
 
 function addStringIssue(issues: ValidationIssue[], value: unknown, path: string, required = false) {
@@ -118,7 +122,9 @@ function validateSession(value: unknown, path: string, issues: ValidationIssue[]
   }
 
   addStringIssue(issues, value.externalId, `${path}.externalId`, true);
-  if (!isDate(value.plannedDate)) issues.push({ path: `${path}.plannedDate`, message: "Must be a valid ISO date." });
+  if (!isIsoDate(value.plannedDate)) {
+    issues.push({ path: `${path}.plannedDate`, message: "Must be a valid ISO date." });
+  }
   addStringIssue(issues, value.title, `${path}.title`, true);
   addStringIssue(issues, value.objective, `${path}.objective`);
   addPositiveIntegerIssue(issues, value.durationSeconds, `${path}.durationSeconds`);
@@ -138,7 +144,9 @@ function validateWeek(value: unknown, path: string, issues: ValidationIssue[]): 
     return false;
   }
 
-  if (!isDate(value.weekStart)) issues.push({ path: `${path}.weekStart`, message: "Must be a valid ISO date." });
+  if (!isIsoWeekStart(value.weekStart)) {
+    issues.push({ path: `${path}.weekStart`, message: "Must be a valid ISO date for a Monday." });
+  }
   addStringIssue(issues, value.title, `${path}.title`);
   addStringIssue(issues, value.priorities, `${path}.priorities`);
 
