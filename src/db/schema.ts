@@ -223,3 +223,53 @@ export const prescription = pgTable(
     ),
   ],
 );
+
+export const sessionExecution = pgTable(
+  "session_execution",
+  {
+    id: uuid("id").primaryKey(),
+    athleteId: uuid("athlete_id").notNull().references(() => athlete.id),
+    plannedSessionId: uuid("planned_session_id").references(() => plannedSession.id),
+    executionDate: date("execution_date", { mode: "string" }).notNull(),
+    status: text("status").notNull(),
+    revision: integer("revision").notNull().default(1),
+    contentHash: text("content_hash").notNull(),
+    generalNote: text("general_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    annulledAt: timestamp("annulled_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("session_execution_athlete_date_idx").on(table.athleteId, table.executionDate),
+    index("session_execution_planned_session_idx").on(table.plannedSessionId),
+    check("session_execution_status_check", sql`${table.status} in ('draft', 'completed', 'annulled')`),
+    check("session_execution_revision_check", sql`${table.revision} > 0`),
+    check(
+      "session_execution_annulled_at_check",
+      sql`(${table.status} = 'annulled') = (${table.annulledAt} is not null)`,
+    ),
+  ],
+);
+
+export const blockExecution = pgTable(
+  "block_execution",
+  {
+    id: uuid("id").primaryKey(),
+    sessionExecutionId: uuid("session_execution_id").notNull().references(() => sessionExecution.id),
+    plannedBlockId: uuid("planned_block_id").references(() => plannedBlock.id),
+    position: integer("position").notNull(),
+    blockTypeId: uuid("block_type_id").notNull().references(() => catalogEntry.id),
+    title: text("title").notNull(),
+    status: text("status").notNull(),
+    notes: text("notes"),
+  },
+  (table) => [
+    uniqueIndex("block_execution_session_position_idx").on(table.sessionExecutionId, table.position),
+    index("block_execution_planned_block_idx").on(table.plannedBlockId),
+    check("block_execution_position_check", sql`${table.position} > 0`),
+    check(
+      "block_execution_status_check",
+      sql`${table.status} in ('draft', 'completed', 'completed_without_metric', 'partial', 'skipped', 'abandoned')`,
+    ),
+  ],
+);
