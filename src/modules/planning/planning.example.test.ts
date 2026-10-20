@@ -17,18 +17,27 @@ describe("example planning", () => {
       deadliftMovementId: "deadlift-id",
     });
 
-    expect(publication.sourceVersion).toBe("example-2026-10-19-v4");
+    expect(publication.sourceVersion).toBe("example-2026-10-19-v5");
     expect(publication.weeks[0]?.sessions[0]?.plannedDate).toBe("2026-10-20");
     expect(publication.weeks[0]?.sessions[0]?.blocks).toHaveLength(3);
-    expect(publication.weeks[0]?.sessions[0]?.blocks[1]?.prescriptions?.[0]?.details).toEqual(
+    const strengthPrescription = publication.weeks[0]?.sessions[0]?.blocks[1]?.prescriptions?.[0];
+    expect(strengthPrescription?.details).toEqual(
       expect.objectContaining({ oneRepMaxPercentage: 75 }),
     );
-    expect(publication.weeks[0]?.sessions[0]?.blocks[1]?.prescriptions?.[0]?.details).not.toEqual(
+    expect(strengthPrescription?.details).not.toEqual(
       expect.objectContaining({ prescribedWeightKg: expect.anything() }),
     );
+    expect(strengthPrescription?.details).not.toEqual(
+      expect.objectContaining({ loadGuidance: expect.anything() }),
+    );
+    expect(strengthPrescription?.notes).toContain("Carga técnica estable");
 
     const wodPrescriptions = publication.weeks[0]?.sessions[0]?.blocks[2]?.prescriptions;
     expect(wodPrescriptions).toHaveLength(3);
+    expect(wodPrescriptions?.[0]?.details).toEqual({
+      format: "amrap",
+      durationSeconds: 720,
+    });
     expect(wodPrescriptions?.[1]).toEqual(
       expect.objectContaining({
         movementId: "back-squat-id",
@@ -45,5 +54,23 @@ describe("example planning", () => {
         notes: "Si no puedes con 83 kg, usa tu 55 % de 1RM.",
       }),
     );
+
+    const formatSession = publication.weeks[0]?.sessions[1];
+    expect(formatSession?.plannedDate).toBe("2026-10-21");
+    expect(formatSession?.blocks).toHaveLength(4);
+    expect(formatSession?.blocks[1]?.prescriptions?.[0]?.details).toEqual({
+      format: "emom",
+      intervalSeconds: 60,
+      durationSeconds: 600,
+    });
+    expect(formatSession?.blocks[2]?.prescriptions?.[0]?.details).toEqual({
+      format: "for_time",
+      timeCapSeconds: 900,
+    });
+    expect(formatSession?.blocks[3]?.prescriptions?.[0]?.details).toEqual({
+      format: "rounds_for_time",
+      rounds: 5,
+      timeCapSeconds: 1200,
+    });
   });
 });

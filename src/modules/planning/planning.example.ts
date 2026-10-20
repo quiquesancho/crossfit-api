@@ -35,7 +35,7 @@ export function createExamplePlanningPublication(
   references: ExampleReferences,
 ): PlanningPublication {
   return {
-    sourceVersion: `example-${weekStart}-v4`,
+    sourceVersion: `example-${weekStart}-v5`,
     title: "Planificación de ejemplo",
     weeks: [
       {
@@ -69,9 +69,8 @@ export function createExamplePlanningPublication(
                       sets: 5,
                       repetitions: 3,
                       oneRepMaxPercentage: 75,
-                      loadGuidance: "Carga técnica estable",
                     },
-                    notes: "Descansar 90 segundos entre series.",
+                    notes: "Carga técnica estable. Descansar 90 segundos entre series.",
                   },
                 ],
               },
@@ -94,6 +93,67 @@ export function createExamplePlanningPublication(
                       repetitions: 8,
                       prescribedWeightKg: 83,
                     },
+                    notes: "Si no puedes con 83 kg, usa tu 55 % de 1RM.",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            externalId: `example-${weekStart}-session-2`,
+            plannedDate: addDays(weekStart, 2),
+            title: "Formatos de WOD",
+            objective: "Practicar EMOM, For Time y Rounds For Time con cargas controladas.",
+            durationSeconds: 3600,
+            targetRpe: 8,
+            blocks: [
+              {
+                blockTypeId: references.warmupBlockTypeId,
+                title: "Calentamiento",
+                instructions: "Movilidad y activación general.",
+                durationSeconds: 600,
+              },
+              {
+                blockTypeId: references.wodBlockTypeId,
+                title: "EMOM 10 minutos",
+                instructions: "Al inicio de cada minuto, completa 5 power cleans.",
+                durationSeconds: 600,
+                targetRpe: 7,
+                prescriptions: [
+                  { details: { format: "emom", intervalSeconds: 60, durationSeconds: 600 } },
+                  {
+                    movementId: references.powerCleanMovementId,
+                    details: { repetitions: 5, prescribedWeightKg: 50 },
+                    notes: "Carga ligera para mantener la técnica durante todo el EMOM.",
+                  },
+                ],
+              },
+              {
+                blockTypeId: references.wodBlockTypeId,
+                title: "For Time con cap de 15 minutos",
+                instructions: "Completa 30 back squats lo antes posible, sin superar el cap.",
+                durationSeconds: 900,
+                targetRpe: 8,
+                prescriptions: [
+                  { details: { format: "for_time", timeCapSeconds: 900 } },
+                  {
+                    movementId: references.backSquatMovementId,
+                    details: { repetitions: 30, prescribedWeightKg: 60 },
+                    notes: "Peso obligatorio: 60 kg.",
+                  },
+                ],
+              },
+              {
+                blockTypeId: references.wodBlockTypeId,
+                title: "Rounds For Time: 5 rondas",
+                instructions: "Cinco rondas de 10 deadlifts, con cap de 20 minutos.",
+                durationSeconds: 1200,
+                targetRpe: 8,
+                prescriptions: [
+                  { details: { format: "rounds_for_time", rounds: 5, timeCapSeconds: 1200 } },
+                  {
+                    movementId: references.deadliftMovementId,
+                    details: { repetitions: 10, prescribedWeightKg: 83 },
                     notes: "Si no puedes con 83 kg, usa tu 55 % de 1RM.",
                   },
                 ],
