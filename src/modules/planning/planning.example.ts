@@ -5,6 +5,8 @@ type ExampleReferences = {
   strengthBlockTypeId: string;
   wodBlockTypeId: string;
   powerCleanMovementId: string;
+  backSquatMovementId: string;
+  deadliftMovementId: string;
 };
 
 function addDays(date: string, days: number): string {
@@ -33,7 +35,7 @@ export function createExamplePlanningPublication(
   references: ExampleReferences,
 ): PlanningPublication {
   return {
-    sourceVersion: `example-${weekStart}-v2`,
+    sourceVersion: `example-${weekStart}-v3`,
     title: "Planificación de ejemplo",
     weeks: [
       {
@@ -66,7 +68,6 @@ export function createExamplePlanningPublication(
                     details: {
                       sets: 5,
                       repetitions: 3,
-                      recommendedWeightKg: 60,
                       oneRepMaxPercentage: 75,
                       loadGuidance: "Carga técnica estable",
                     },
@@ -80,7 +81,23 @@ export function createExamplePlanningPublication(
                 instructions: "Mantener un ritmo que permita completar todas las rondas sin pausas largas.",
                 durationSeconds: 720,
                 targetRpe: 8,
-                prescriptions: [{ details: { format: "amrap", durationSeconds: 720 } }],
+                prescriptions: [
+                  { details: { format: "amrap", durationSeconds: 720 } },
+                  {
+                    movementId: references.backSquatMovementId,
+                    details: { repetitions: 10, recommendedWeightKg: 60 },
+                    notes: "Peso obligatorio: 60 kg.",
+                  },
+                  {
+                    movementId: references.deadliftMovementId,
+                    details: {
+                      repetitions: 8,
+                      recommendedWeightKg: 83,
+                      fallbackOneRepMaxPercentage: 55,
+                    },
+                    notes: "Si no puedes con 83 kg, usa tu 55 % de 1RM.",
+                  },
+                ],
               },
             ],
           },

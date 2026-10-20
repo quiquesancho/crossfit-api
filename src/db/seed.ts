@@ -66,9 +66,33 @@ if (!clean) {
   throw new Error("Failed to seed the clean movement family.");
 }
 
+const [squat] = await database
+  .insert(movementFamily)
+  .values({ code: "squat", name: "Squat" })
+  .onConflictDoUpdate({ target: movementFamily.code, set: { name: sql`excluded.name` } })
+  .returning({ id: movementFamily.id });
+
+if (!squat) {
+  throw new Error("Failed to seed the squat movement family.");
+}
+
+const [hinge] = await database
+  .insert(movementFamily)
+  .values({ code: "hinge", name: "Hinge" })
+  .onConflictDoUpdate({ target: movementFamily.code, set: { name: sql`excluded.name` } })
+  .returning({ id: movementFamily.id });
+
+if (!hinge) {
+  throw new Error("Failed to seed the hinge movement family.");
+}
+
 await database
   .insert(movement)
-  .values({ code: "power-clean", familyId: clean.id, name: "Power clean" })
+  .values([
+    { code: "power-clean", familyId: clean.id, name: "Power clean" },
+    { code: "back-squat", familyId: squat.id, name: "Back squat" },
+    { code: "deadlift", familyId: hinge.id, name: "Deadlift" },
+  ])
   .onConflictDoUpdate({
     target: movement.code,
     set: { name: sql`excluded.name`, familyId: sql`excluded.family_id` },
