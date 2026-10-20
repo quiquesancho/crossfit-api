@@ -8,6 +8,11 @@ on:
         required: true
         default: main
         type: string
+      seed_example:
+        description: Publish the example planning version after deploying
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -55,3 +60,10 @@ jobs:
             docker compose --env-file /opt/crossfit/preproduction/.env \
               -f environments/preproduction/docker-compose.yml up -d --pull always
           '
+      - name: Publish example planning version
+        if: ${{ inputs.seed_example }}
+        run: |
+          cd /opt/crossfit/crossfit-deploy
+          docker compose --env-file /opt/crossfit/preproduction/.env \
+            -f environments/preproduction/docker-compose.yml \
+            run --rm --no-deps migrate node dist/db/seed-planning-example.js
