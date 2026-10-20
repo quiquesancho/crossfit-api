@@ -33,7 +33,7 @@ export function createExamplePlanningPublication(
   references: ExampleReferences,
 ): PlanningPublication {
   return {
-    sourceVersion: `example-${weekStart}-v1`,
+    sourceVersion: `example-${weekStart}-v2`,
     title: "Planificación de ejemplo",
     weeks: [
       {
@@ -63,7 +63,13 @@ export function createExamplePlanningPublication(
                 prescriptions: [
                   {
                     movementId: references.powerCleanMovementId,
-                    details: { sets: 5, repetitions: 3, loadGuidance: "Carga técnica estable" },
+                    details: {
+                      sets: 5,
+                      repetitions: 3,
+                      recommendedWeightKg: 60,
+                      oneRepMaxPercentage: 75,
+                      loadGuidance: "Carga técnica estable",
+                    },
                     notes: "Descansar 90 segundos entre series.",
                   },
                 ],

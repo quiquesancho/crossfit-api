@@ -15,8 +15,11 @@ describe("example planning", () => {
       powerCleanMovementId: "movement-id",
     });
 
-    expect(publication.sourceVersion).toBe("example-2026-10-19-v1");
+    expect(publication.sourceVersion).toBe("example-2026-10-19-v2");
     expect(publication.weeks[0]?.sessions[0]?.plannedDate).toBe("2026-10-20");
     expect(publication.weeks[0]?.sessions[0]?.blocks).toHaveLength(3);
+    expect(publication.weeks[0]?.sessions[0]?.blocks[1]?.prescriptions?.[0]?.details).toEqual(
+      expect.objectContaining({ recommendedWeightKg: 60, oneRepMaxPercentage: 75 }),
+    );
   });
 });
