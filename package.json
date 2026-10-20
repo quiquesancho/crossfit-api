@@ -14,7 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "db:seed:planning-example": "tsx src/db/seed-planning-example.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",

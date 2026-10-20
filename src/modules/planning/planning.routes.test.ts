@@ -168,3 +168,68 @@ describe("planning publication route", () => {
     expect(response.json()).toEqual(expect.objectContaining({ code }));
   });
 });
+
+describe("planning week route", () => {
+  const getWeek = vi.fn();
+  const app = buildApp({ planningWeekReader: { getWeek } });
+  afterAll(async () => app.close());
+
+  it("returns a composed planning week", async () => {
+    getWeek.mockResolvedValueOnce({
+      id: "019b4e0a-0000-7000-8000-000000000040",
+      trainingPlanId: "019b4e0a-0000-7000-8000-000000000030",
+      planVersionId: "019b4e0a-0000-7000-8000-000000000031",
+      planTitle: "Plan de prueba",
+      weekStart: "2026-10-19",
+      title: null,
+      priorities: null,
+      sessions: [],
+    });
+
+    const response = await app.inject({ method: "GET", url: "/api/v1/planning/weeks/2026-10-19" });
+
+    expect(response.statusCode).toBe(200);
+    expect(getWeek).toHaveBeenCalledWith("2026-10-19");
+    expect(response.json()).toEqual(expect.objectContaining({ weekStart: "2026-10-19" }));
+  });
+
+  it("requires each planning week to start on Monday", () => {
+    const invalid = structuredClone(publication);
+    invalid.weeks[0]!.weekStart = "2026-10-20";
+
+    const result = validatePlanningPublication(invalid);
+
+    expect(result).toEqual({
+      valid: false,
+      issues: [{ path: "weeks[0].weekStart", message: "Must be a valid ISO date for a Monday." }],
+    });
+  });
+
+  it("validates the requested date", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/v1/planning/weeks/2026-02-30" });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("rejects a valid date that is not a Monday", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/v1/planning/weeks/2026-10-20" });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("returns 404 when no published week exists", async () => {
+    getWeek.mockResolvedValueOnce(null);
+    const response = await app.inject({ method: "GET", url: "/api/v1/planning/weeks/2026-10-26" });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual(expect.objectContaining({ code: "planning_week_not_found" }));
+  });
+});
+
+describe("planning week route without persistence", () => {
+  const app = buildApp();
+  afterAll(async () => app.close());
+
+  it("returns 503 when planning queries are unavailable", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/v1/planning/weeks/2026-10-19" });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual(expect.objectContaining({ code: "service_unavailable" }));
+  });
+});

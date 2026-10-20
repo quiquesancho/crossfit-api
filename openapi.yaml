@@ -37,10 +37,16 @@ paths:
         - name: weekStart
           in: path
           required: true
-          schema: { type: string, format: date }
+          schema: { type: string, format: date, description: Monday that starts the requested week }
       responses:
-        '200': { description: Planning week and planned sessions }
+        '200':
+          description: Planning week and planned sessions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanningWeekView' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '404': { description: No active planning week }
+        '503': { description: Planning query service unavailable }
   /session-executions:
     get:
       summary: List session execution history for the current athlete
@@ -213,6 +219,86 @@ components:
         code: { type: string, example: strength }
         description: { type: string, example: Trabajo de fuerza }
         displayOrder: { type: integer }
+    PlanningWeekView:
+      type: object
+      required: [id, trainingPlanId, planVersionId, planTitle, weekStart, title, priorities, sessions]
+      properties:
+        id: { type: string, format: uuid }
+        trainingPlanId: { type: string, format: uuid }
+        planVersionId: { type: string, format: uuid }
+        planTitle: { type: string }
+        weekStart: { type: string, format: date }
+        title: { type: [string, 'null'] }
+        priorities: { type: [string, 'null'] }
+        sessions:
+          type: array
+          items: { $ref: '#/components/schemas/PlannedSessionView' }
+    PlannedSessionView:
+      type: object
+      required: [id, externalId, plannedDate, title, objective, durationSeconds, targetRpe, blocks]
+      properties:
+        id: { type: string, format: uuid }
+        externalId: { type: [string, 'null'] }
+        plannedDate: { type: string, format: date }
+        title: { type: string }
+        objective: { type: [string, 'null'] }
+        durationSeconds: { type: [integer, 'null'], minimum: 1 }
+        targetRpe: { type: [integer, 'null'], minimum: 1, maximum: 10 }
+        blocks:
+          type: array
+          items: { $ref: '#/components/schemas/PlannedBlockView' }
+    PlannedBlockView:
+      type: object
+      required: [id, position, blockType, title, instructions, durationSeconds, targetRpe, prescriptions]
+      properties:
+        id: { type: string, format: uuid }
+        position: { type: integer, minimum: 1 }
+        blockType: { $ref: '#/components/schemas/BlockTypeReference' }
+        title: { type: string }
+        instructions: { type: [string, 'null'] }
+        durationSeconds: { type: [integer, 'null'], minimum: 1 }
+        targetRpe: { type: [integer, 'null'], minimum: 1, maximum: 10 }
+        prescriptions:
+          type: array
+          items: { $ref: '#/components/schemas/PrescriptionView' }
+    BlockTypeReference:
+      type: object
+      required: [id, code, description]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        description: { type: string }
+    PrescriptionView:
+      type: object
+      required: [id, position, movement, complex, details, notes]
+      properties:
+        id: { type: string, format: uuid }
+        position: { type: integer, minimum: 1 }
+        movement:
+          anyOf:
+            - { $ref: '#/components/schemas/MovementReference' }
+            - { type: 'null' }
+        complex:
+          anyOf:
+            - { $ref: '#/components/schemas/ComplexReference' }
+            - { type: 'null' }
+        details: { type: object, additionalProperties: true }
+        notes: { type: [string, 'null'] }
+    MovementReference:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+    ComplexReference:
+      type: object
+      required: [id, code, name, versionNumber]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        versionNumber: { type: integer, minimum: 1 }
     CalendarDay:
       type: object
       required: [date, plannedSessions, executions]
@@ -251,7 +337,7 @@ components:
             type: object
             required: [weekStart, sessions]
             properties:
-              weekStart: { type: string, format: date }
+              weekStart: { type: string, format: date, description: Monday that starts the week }
               title: { type: string }
               priorities: { type: string }
               sessions:

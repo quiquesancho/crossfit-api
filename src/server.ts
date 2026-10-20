@@ -3,12 +3,14 @@ import { loadConfig } from "./config/env.js";
 import { createDatabase } from "./db/client.js";
 import { createCatalogReader } from "./modules/catalog/catalog.repository.js";
 import { createPlanningPublisher } from "./modules/planning/planning.publisher.js";
+import { createPlanningWeekReader } from "./modules/planning/planning.repository.js";
 
 const config = loadConfig();
 const database = config.databaseUrl ? createDatabase(config.databaseUrl) : undefined;
 const app = buildApp({
   catalogReader: database ? createCatalogReader(database) : undefined,
   planningPublisher: database ? createPlanningPublisher(database) : undefined,
+  planningWeekReader: database ? createPlanningWeekReader(database) : undefined,
   openClawServiceKey: config.openClawServiceKey,
 });
 
