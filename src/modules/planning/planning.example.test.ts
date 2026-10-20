@@ -17,14 +17,14 @@ describe("example planning", () => {
       deadliftMovementId: "deadlift-id",
     });
 
-    expect(publication.sourceVersion).toBe("example-2026-10-19-v3");
+    expect(publication.sourceVersion).toBe("example-2026-10-19-v4");
     expect(publication.weeks[0]?.sessions[0]?.plannedDate).toBe("2026-10-20");
     expect(publication.weeks[0]?.sessions[0]?.blocks).toHaveLength(3);
     expect(publication.weeks[0]?.sessions[0]?.blocks[1]?.prescriptions?.[0]?.details).toEqual(
       expect.objectContaining({ oneRepMaxPercentage: 75 }),
     );
     expect(publication.weeks[0]?.sessions[0]?.blocks[1]?.prescriptions?.[0]?.details).not.toEqual(
-      expect.objectContaining({ recommendedWeightKg: expect.anything() }),
+      expect.objectContaining({ prescribedWeightKg: expect.anything() }),
     );
 
     const wodPrescriptions = publication.weeks[0]?.sessions[0]?.blocks[2]?.prescriptions;
@@ -32,7 +32,7 @@ describe("example planning", () => {
     expect(wodPrescriptions?.[1]).toEqual(
       expect.objectContaining({
         movementId: "back-squat-id",
-        details: { repetitions: 10, recommendedWeightKg: 60 },
+        details: { repetitions: 10, prescribedWeightKg: 60 },
       }),
     );
     expect(wodPrescriptions?.[2]).toEqual(
@@ -40,9 +40,9 @@ describe("example planning", () => {
         movementId: "deadlift-id",
         details: {
           repetitions: 8,
-          recommendedWeightKg: 83,
-          fallbackOneRepMaxPercentage: 55,
+          prescribedWeightKg: 83,
         },
+        notes: "Si no puedes con 83 kg, usa tu 55 % de 1RM.",
       }),
     );
   });

@@ -35,7 +35,7 @@ export function createExamplePlanningPublication(
   references: ExampleReferences,
 ): PlanningPublication {
   return {
-    sourceVersion: `example-${weekStart}-v3`,
+    sourceVersion: `example-${weekStart}-v4`,
     title: "Planificación de ejemplo",
     weeks: [
       {
@@ -85,15 +85,14 @@ export function createExamplePlanningPublication(
                   { details: { format: "amrap", durationSeconds: 720 } },
                   {
                     movementId: references.backSquatMovementId,
-                    details: { repetitions: 10, recommendedWeightKg: 60 },
+                    details: { repetitions: 10, prescribedWeightKg: 60 },
                     notes: "Peso obligatorio: 60 kg.",
                   },
                   {
                     movementId: references.deadliftMovementId,
                     details: {
                       repetitions: 8,
-                      recommendedWeightKg: 83,
-                      fallbackOneRepMaxPercentage: 55,
+                      prescribedWeightKg: 83,
                     },
                     notes: "Si no puedes con 83 kg, usa tu 55 % de 1RM.",
                   },
