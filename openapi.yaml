@@ -163,7 +163,10 @@ paths:
         - name: executionId
           in: path
           required: true
-          schema: { type: string, format: uuid }
+          schema:
+            type: string
+            format: uuid
+            pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
       requestBody:
         required: true
         content:
@@ -177,6 +180,7 @@ paths:
               schema: { $ref: '#/components/schemas/SessionExecutionResult' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '409': { description: Conflicting synchronized revision }
+        '503': { description: Local profile or execution synchronization service unavailable }
 components:
   securitySchemes:
     OpenClawServiceKey:
@@ -387,35 +391,44 @@ components:
         status: { type: string, enum: [published, unchanged] }
     SessionExecutionWrite:
       type: object
-      required: [executionDate, status, blocks]
+      additionalProperties: false
+      required: [baseRevision, executionDate, status, blocks]
       properties:
+        baseRevision:
+          type: integer
+          minimum: 0
+          description: Last server revision known by the client, or 0 when creating the execution.
         plannedSessionId: { type: string, format: uuid }
         executionDate: { type: string, format: date }
         status: { type: string, enum: [draft, completed, annulled] }
         generalNote: { type: string }
         blocks:
           type: array
+          minItems: 1
           items:
             type: object
+            additionalProperties: false
             required: [id, position, blockTypeId, title, status]
             properties:
-              id: { type: string, format: uuid }
+              id:
+                type: string
+                format: uuid
+                pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
               plannedBlockId: { type: string, format: uuid }
               position: { type: integer, minimum: 1 }
               blockTypeId: { type: string, format: uuid }
-              title: { type: string }
+              title: { type: string, minLength: 1 }
               status: { type: string, enum: [draft, completed, completed_without_metric, partial, skipped, abandoned] }
               notes: { type: string }
-              attempts: { type: array, items: { $ref: '#/components/schemas/SetAttemptWrite' } }
-              metrics: { type: array, items: { $ref: '#/components/schemas/MetricWrite' } }
-              feelings: { type: array, items: { $ref: '#/components/schemas/FeelingWrite' } }
     SessionExecutionResult:
       type: object
-      required: [id, status, updatedAt]
+      required: [id, revision, status, updatedAt, result]
       properties:
         id: { type: string, format: uuid }
-        status: { type: string }
+        revision: { type: integer, minimum: 1 }
+        status: { type: string, enum: [draft, completed, annulled] }
         updatedAt: { type: string, format: date-time }
+        result: { type: string, enum: [persisted, unchanged] }
     SetAttemptWrite:
       type: object
       required: [id, position, status]

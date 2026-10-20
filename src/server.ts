@@ -2,6 +2,7 @@ import { buildApp } from "./app.js";
 import { loadConfig } from "./config/env.js";
 import { createDatabase } from "./db/client.js";
 import { createCatalogReader } from "./modules/catalog/catalog.repository.js";
+import { createSessionExecutionWriter } from "./modules/execution/execution.writer.js";
 import { createPlanningPublisher } from "./modules/planning/planning.publisher.js";
 import { createPlanningWeekReader } from "./modules/planning/planning.repository.js";
 
@@ -11,6 +12,7 @@ const app = buildApp({
   catalogReader: database ? createCatalogReader(database) : undefined,
   planningPublisher: database ? createPlanningPublisher(database) : undefined,
   planningWeekReader: database ? createPlanningWeekReader(database) : undefined,
+  sessionExecutionWriter: database ? createSessionExecutionWriter(database) : undefined,
   openClawServiceKey: config.openClawServiceKey,
 });
 

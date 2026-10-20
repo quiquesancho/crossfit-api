@@ -158,6 +158,35 @@ const planningWeekReader = {
   }),
 };
 
+const executionId = "019b4e0a-0000-7000-8000-000000000101";
+const executionSnapshot = {
+  baseRevision: 0,
+  plannedSessionId: "019b4e0a-0000-7000-8000-000000000041",
+  executionDate: "2026-10-20",
+  status: "draft" as const,
+  generalNote: "Primera sesión",
+  blocks: [
+    {
+      id: "019b4e0a-0000-7000-8000-000000000102",
+      plannedBlockId: "019b4e0a-0000-7000-8000-000000000042",
+      position: 1,
+      blockTypeId: "019b4e0a-0000-7000-8000-000000000003",
+      title: "Fuerza",
+      status: "completed_without_metric" as const,
+      notes: "Realizado sin anotar la carga.",
+    },
+  ],
+};
+const sessionExecutionWriter = {
+  synchronize: async () => ({
+    id: executionId,
+    revision: 1,
+    status: "draft" as const,
+    updatedAt: "2026-10-20T13:00:00.000Z",
+    result: "persisted" as const,
+  }),
+};
+
 describe("openapi contract document", () => {
   it("declares the version and the implemented paths", () => {
     expect(contract.openapi).toBe("3.1.0");
@@ -214,5 +243,22 @@ describe("planning responses conform to the contract", () => {
       responseValidator("/integrations/openclaw/training-plans/{externalPlanId}", "put", 201),
       response.json(),
     );
+  });
+});
+
+describe("execution synchronization conforms to the contract", () => {
+  const app = buildApp({ sessionExecutionWriter });
+  afterAll(async () => app.close());
+
+  it("PUT /session-executions/{executionId}", async () => {
+    expectValid(requestValidator("/session-executions/{executionId}", "put"), executionSnapshot);
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/v1/session-executions/${executionId}`,
+      payload: executionSnapshot,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(responseValidator("/session-executions/{executionId}", "put", 200), response.json());
   });
 });
