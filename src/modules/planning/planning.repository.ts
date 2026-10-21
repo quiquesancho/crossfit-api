@@ -15,6 +15,7 @@ import {
   trainingPlan,
 } from "../../db/schema.js";
 import type { PlanningWeekReader, PlanningWeekView } from "./planning.types.js";
+import { prescriptionAllowsActualWeight } from "./planning.load.js";
 
 export function createPlanningWeekReader(database: Database): PlanningWeekReader {
   return {
@@ -141,6 +142,7 @@ export function createPlanningWeekReader(database: Database): PlanningWeekReader
                         }
                       : null,
                   details: item.details,
+                  allowsActualWeight: prescriptionAllowsActualWeight(item.details),
                   notes: item.notes,
                 })),
             })),

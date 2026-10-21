@@ -82,6 +82,8 @@ export type PlanningWeekView = {
         movement: { id: string; code: string; name: string } | null;
         complex: { id: string; code: string; name: string; versionNumber: number } | null;
         details: Record<string, unknown>;
+        /** Whether the prescription accepts the actual weight used during execution. */
+        allowsActualWeight: boolean;
         notes: string | null;
       }>;
     }>;
