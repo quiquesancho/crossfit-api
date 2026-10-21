@@ -44,6 +44,34 @@ describe("planning publication validation", () => {
     expect(validatePlanningPublication(publication)).toEqual({ valid: true, publication });
   });
 
+  it("accepts a prescribed weight with an explicit unit", () => {
+    const valid = structuredClone(publication);
+    valid.weeks[0]!.sessions[0]!.blocks[0]!.prescriptions![0]!.details = {
+      repetitions: 10,
+      prescribedWeight: { amount: 60, unit: "kg" },
+    };
+
+    expect(validatePlanningPublication(valid)).toEqual({ valid: true, publication: valid });
+  });
+
+  it("rejects a prescribed weight without a unit", () => {
+    const invalid = structuredClone(publication);
+    invalid.weeks[0]!.sessions[0]!.blocks[0]!.prescriptions![0]!.details = {
+      repetitions: 10,
+      prescribedWeight: { amount: 60 },
+    };
+
+    const result = validatePlanningPublication(invalid);
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.issues).toContainEqual({
+        path: "weeks[0].sessions[0].blocks[0].prescriptions[0].details.prescribedWeight.unit",
+        message: "Must be a non-empty string.",
+      });
+    }
+  });
+
   it("rejects conflicting prescription references", () => {
     const invalid = structuredClone(publication);
     invalid.weeks[0]!.sessions[0]!.blocks[0]!.prescriptions![0]!.complexVersionId =

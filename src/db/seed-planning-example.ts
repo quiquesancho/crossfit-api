@@ -30,16 +30,34 @@ const blockTypes = await database
     ),
   );
 const blockTypeByCode = new Map(blockTypes.map((entry) => [entry.code, entry.id]));
-const [powerClean] = await database
-  .select({ id: movement.id })
-  .from(movement)
-  .where(and(eq(movement.code, "power-clean"), isNull(movement.archivedAt)))
-  .limit(1);
+const movementByCode = new Map(
+  (
+    await database
+      .select({ id: movement.id, code: movement.code })
+      .from(movement)
+      .where(
+        and(
+          inArray(movement.code, ["power-clean", "back-squat", "deadlift"]),
+          isNull(movement.archivedAt),
+        ),
+      )
+  ).map((entry) => [entry.code, entry.id]),
+);
 
 const warmupBlockTypeId = blockTypeByCode.get("warmup");
 const strengthBlockTypeId = blockTypeByCode.get("strength");
 const wodBlockTypeId = blockTypeByCode.get("wod");
-if (!warmupBlockTypeId || !strengthBlockTypeId || !wodBlockTypeId || !powerClean) {
+const powerCleanMovementId = movementByCode.get("power-clean");
+const backSquatMovementId = movementByCode.get("back-squat");
+const deadliftMovementId = movementByCode.get("deadlift");
+if (
+  !warmupBlockTypeId ||
+  !strengthBlockTypeId ||
+  !wodBlockTypeId ||
+  !powerCleanMovementId ||
+  !backSquatMovementId ||
+  !deadliftMovementId
+) {
   throw new Error("The catalog seed must run before seeding the example planning week.");
 }
 
@@ -51,7 +69,9 @@ const publication = createExamplePlanningPublication(weekStart, {
   warmupBlockTypeId,
   strengthBlockTypeId,
   wodBlockTypeId,
-  powerCleanMovementId: powerClean.id,
+  powerCleanMovementId,
+  backSquatMovementId,
+  deadliftMovementId,
 });
 const result = await createPlanningPublisher(database).publish("example-plan", publication);
 console.log(JSON.stringify({ weekStart, ...result }));
