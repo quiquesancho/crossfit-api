@@ -274,7 +274,7 @@ components:
         description: { type: string }
     PrescriptionView:
       type: object
-      required: [id, position, movement, complex, details, notes]
+      required: [id, position, movement, complex, details, allowsActualWeight, notes]
       properties:
         id: { type: string, format: uuid }
         position: { type: integer, minimum: 1 }
@@ -287,6 +287,13 @@ components:
             - { $ref: '#/components/schemas/ComplexReference' }
             - { type: 'null' }
         details: { type: object, additionalProperties: true }
+        allowsActualWeight:
+          type: boolean
+          description: >-
+            Whether the prescription accepts the actual weight used during execution.
+            Computed by the API from the structured load in `details` (absolute weight,
+            legacy weight in kilograms or a percentage of 1RM). The PWA must use this
+            flag instead of inferring eligibility from `details`.
         notes: { type: [string, 'null'] }
     MovementReference:
       type: object

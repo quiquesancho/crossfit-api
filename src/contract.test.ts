@@ -148,6 +148,7 @@ const planningWeekReader = {
                 },
                 complex: null,
                 details: { sets: 5, repetitions: 3 },
+                allowsActualWeight: false,
                 notes: "Descansar 90 segundos.",
               },
             ],
