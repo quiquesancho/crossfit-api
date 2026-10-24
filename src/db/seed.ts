@@ -30,31 +30,101 @@ await database
     },
   });
 
-const [blockType] = await database
-  .insert(catalog)
-  .values({ key: "block-type", description: "Tipos de bloque de entrenamiento" })
-  .onConflictDoUpdate({ target: catalog.key, set: { description: sql`excluded.description` } })
-  .returning({ id: catalog.id });
+type CatalogSeed = {
+  key: string;
+  description: string;
+  entries: Array<{ code: string; description: string }>;
+};
 
-if (!blockType) {
-  throw new Error("Failed to seed the block-type catalog.");
+const catalogs: CatalogSeed[] = [
+  {
+    key: "block-type",
+    description: "Tipos de bloque de entrenamiento",
+    entries: [
+      { code: "warmup", description: "Calentamiento" },
+      { code: "technique", description: "Técnica" },
+      { code: "strength", description: "Fuerza" },
+      { code: "wod", description: "WOD" },
+    ],
+  },
+  {
+    key: "recovery",
+    description: "Recuperación percibida",
+    entries: [
+      { code: "very-poor", description: "Muy mala" },
+      { code: "poor", description: "Mala" },
+      { code: "normal", description: "Normal" },
+      { code: "good", description: "Buena" },
+      { code: "very-good", description: "Muy buena" },
+    ],
+  },
+  {
+    key: "technique-quality",
+    description: "Calidad técnica percibida",
+    entries: [
+      { code: "poor", description: "Deficiente" },
+      { code: "acceptable", description: "Aceptable" },
+      { code: "good", description: "Buena" },
+      { code: "excellent", description: "Excelente" },
+    ],
+  },
+  {
+    key: "limitation",
+    description: "Limitante principal del entrenamiento",
+    entries: [
+      { code: "technique", description: "Técnica" },
+      { code: "cardiorespiratory", description: "Cardiorrespiratoria" },
+      { code: "local-muscular", description: "Muscular local" },
+      { code: "pain", description: "Dolor" },
+      { code: "time", description: "Tiempo" },
+      { code: "other", description: "Otro" },
+    ],
+  },
+  {
+    key: "substitution-reason",
+    description: "Motivos de sustitución de movimientos",
+    entries: [
+      { code: "pain", description: "Dolor o molestia" },
+      { code: "equipment", description: "Material no disponible" },
+      { code: "technique", description: "Limitación técnica" },
+      { code: "time", description: "Falta de tiempo" },
+      { code: "other", description: "Otro" },
+    ],
+  },
+];
+
+for (const catalogSeed of catalogs) {
+  const [seededCatalog] = await database
+    .insert(catalog)
+    .values({ key: catalogSeed.key, description: catalogSeed.description })
+    .onConflictDoUpdate({
+      target: catalog.key,
+      set: { description: sql`excluded.description` },
+    })
+    .returning({ id: catalog.id });
+
+  if (!seededCatalog) {
+    throw new Error(`Failed to seed the ${catalogSeed.key} catalog.`);
+  }
+
+  await database
+    .insert(catalogEntry)
+    .values(
+      catalogSeed.entries.map((entry, index) => ({
+        catalogId: seededCatalog.id,
+        code: entry.code,
+        description: entry.description,
+        displayOrder: index + 1,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [catalogEntry.catalogId, catalogEntry.code],
+      set: {
+        description: sql`excluded.description`,
+        displayOrder: sql`excluded.display_order`,
+      },
+    });
 }
-
-await database
-  .insert(catalogEntry)
-  .values([
-    { catalogId: blockType.id, code: "warmup", description: "Calentamiento", displayOrder: 1 },
-    { catalogId: blockType.id, code: "technique", description: "Técnica", displayOrder: 2 },
-    { catalogId: blockType.id, code: "strength", description: "Fuerza", displayOrder: 3 },
-    { catalogId: blockType.id, code: "wod", description: "WOD", displayOrder: 4 },
-  ])
-  .onConflictDoUpdate({
-    target: [catalogEntry.catalogId, catalogEntry.code],
-    set: {
-      description: sql`excluded.description`,
-      displayOrder: sql`excluded.display_order`,
-    },
-  });
 
 const [clean] = await database
   .insert(movementFamily)

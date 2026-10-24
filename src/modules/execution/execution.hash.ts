@@ -9,6 +9,7 @@ export function hashSessionExecution(snapshot: SessionExecutionSnapshot): string
     executionDate: normalized.executionDate,
     status: normalized.status,
     generalNote: normalized.generalNote,
+    feeling: normalized.feeling,
     blocks: normalized.blocks,
   });
 }

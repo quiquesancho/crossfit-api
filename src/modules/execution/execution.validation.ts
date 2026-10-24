@@ -2,8 +2,10 @@ import type {
   BlockExecutionSnapshot,
   BlockExecutionStatus,
   ExecutionValidationIssue,
+  FeelingSnapshot,
   SessionExecutionSnapshot,
   SessionExecutionStatus,
+  SubstitutionSnapshot,
 } from "./execution.types.js";
 import { isIsoDate } from "../planning/planning.validation.js";
 
@@ -26,6 +28,22 @@ const PRESCRIPTION_METRIC_KEYS = new Set([
   "loadStatus",
 ]);
 const WEIGHT_KEYS = new Set(["amount", "unit"]);
+const FEELING_KEYS = new Set([
+  "id",
+  "rpe",
+  "pain",
+  "recoveryId",
+  "techniqueQualityId",
+  "limitationId",
+  "note",
+]);
+const SUBSTITUTION_KEYS = new Set([
+  "id",
+  "plannedPrescriptionId",
+  "actualMovementId",
+  "reasonId",
+  "note",
+]);
 
 type ObjectValue = Record<string, unknown>;
 
@@ -144,6 +162,98 @@ function validateMetrics(value: unknown, path: string, issues: ExecutionValidati
   }
 }
 
+function validateFeeling(
+  value: unknown,
+  path: string,
+  issues: ExecutionValidationIssue[],
+): value is FeelingSnapshot {
+  if (!isObject(value)) {
+    issues.push({ path, message: "Must be an object." });
+    return false;
+  }
+  unsupportedKeyIssues(issues, value, FEELING_KEYS, path);
+  uuidIssue(issues, value.id, `${path}.id`, true);
+  if (
+    value.rpe !== undefined &&
+    (typeof value.rpe !== "number" || !Number.isInteger(value.rpe) || value.rpe < 1 || value.rpe > 10)
+  ) {
+    issues.push({ path: `${path}.rpe`, message: "Must be an integer between 1 and 10." });
+  }
+  if (
+    value.pain !== undefined &&
+    (typeof value.pain !== "number" ||
+      !Number.isInteger(value.pain) ||
+      value.pain < 0 ||
+      value.pain > 10)
+  ) {
+    issues.push({ path: `${path}.pain`, message: "Must be an integer between 0 and 10." });
+  }
+  for (const key of ["recoveryId", "techniqueQualityId", "limitationId"] as const) {
+    if (value[key] !== undefined) uuidIssue(issues, value[key], `${path}.${key}`);
+  }
+  optionalStringIssue(issues, value.note, `${path}.note`);
+  const hasContent =
+    value.rpe !== undefined ||
+    value.pain !== undefined ||
+    value.recoveryId !== undefined ||
+    value.techniqueQualityId !== undefined ||
+    value.limitationId !== undefined ||
+    isNonEmptyString(value.note);
+  if (!hasContent) {
+    issues.push({ path, message: "Must include at least one feeling value." });
+  }
+  return true;
+}
+
+function validateSubstitution(
+  value: unknown,
+  path: string,
+  issues: ExecutionValidationIssue[],
+): value is SubstitutionSnapshot {
+  if (!isObject(value)) {
+    issues.push({ path, message: "Must be an object." });
+    return false;
+  }
+  unsupportedKeyIssues(issues, value, SUBSTITUTION_KEYS, path);
+  uuidIssue(issues, value.id, `${path}.id`, true);
+  uuidIssue(issues, value.plannedPrescriptionId, `${path}.plannedPrescriptionId`);
+  uuidIssue(issues, value.actualMovementId, `${path}.actualMovementId`);
+  if (value.reasonId !== undefined) uuidIssue(issues, value.reasonId, `${path}.reasonId`);
+  optionalStringIssue(issues, value.note, `${path}.note`);
+  return true;
+}
+
+function validateSubstitutions(
+  value: unknown,
+  path: string,
+  issues: ExecutionValidationIssue[],
+) {
+  if (!Array.isArray(value)) {
+    issues.push({ path, message: "Must be an array." });
+    return;
+  }
+  const ids = new Set<string>();
+  const prescriptions = new Set<string>();
+  value.forEach((item: unknown, index: number) => {
+    const itemPath = `${path}[${index}]`;
+    validateSubstitution(item, itemPath, issues);
+    if (!isObject(item)) return;
+    if (typeof item.id === "string") {
+      if (ids.has(item.id)) issues.push({ path: `${itemPath}.id`, message: "Must be unique." });
+      ids.add(item.id);
+    }
+    if (typeof item.plannedPrescriptionId === "string") {
+      if (prescriptions.has(item.plannedPrescriptionId)) {
+        issues.push({
+          path: `${itemPath}.plannedPrescriptionId`,
+          message: "Must be unique within the block.",
+        });
+      }
+      prescriptions.add(item.plannedPrescriptionId);
+    }
+  });
+}
+
 function validateBlock(value: unknown, path: string, issues: ExecutionValidationIssue[]): value is BlockExecutionSnapshot {
   if (!isObject(value)) {
     issues.push({ path, message: "Must be an object." });
@@ -164,7 +274,11 @@ function validateBlock(value: unknown, path: string, issues: ExecutionValidation
   }
   optionalStringIssue(issues, value.notes, `${path}.notes`);
   if (value.metrics !== undefined) validateMetrics(value.metrics, `${path}.metrics`, issues);
-  for (const unsupported of ["attempts", "feelings", "substitutions"]) {
+  if (value.feeling !== undefined) validateFeeling(value.feeling, `${path}.feeling`, issues);
+  if (value.substitutions !== undefined) {
+    validateSubstitutions(value.substitutions, `${path}.substitutions`, issues);
+  }
+  for (const unsupported of ["attempts", "feelings", "setAttempts"]) {
     if (value[unsupported] !== undefined) {
       issues.push({ path: `${path}.${unsupported}`, message: "Is not supported in this API version." });
     }
@@ -192,6 +306,7 @@ export function validateSessionExecutionSnapshot(value: unknown):
     issues.push({ path: "status", message: "Must be a supported execution status." });
   }
   optionalStringIssue(issues, value.generalNote, "generalNote");
+  if (value.feeling !== undefined) validateFeeling(value.feeling, "feeling", issues);
   if (!Array.isArray(value.blocks) || value.blocks.length === 0) {
     issues.push({ path: "blocks", message: "Must contain at least one block." });
   } else {

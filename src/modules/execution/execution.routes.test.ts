@@ -75,6 +75,103 @@ describe("execution snapshot validation", () => {
     });
   });
 
+  it("accepts feelings and substitutions", () => {
+    const withAnnotations = structuredClone(snapshot);
+    withAnnotations.feeling = {
+      id: "019b4e0a-0000-7000-8000-000000000061",
+      rpe: 7,
+      pain: 2,
+      recoveryId: "019b4e0a-0000-4000-8000-000000000051",
+      note: "Sesión exigente.",
+    };
+    withAnnotations.blocks[0]!.feeling = {
+      id: "019b4e0a-0000-7000-8000-000000000062",
+      techniqueQualityId: "019b4e0a-0000-4000-8000-000000000052",
+    };
+    withAnnotations.blocks[0]!.substitutions = [
+      {
+        id: "019b4e0a-0000-7000-8000-000000000063",
+        plannedPrescriptionId: "019b4e0a-0000-4000-8000-000000000043",
+        actualMovementId: "019b4e0a-0000-4000-8000-000000000010",
+        reasonId: "019b4e0a-0000-4000-8000-000000000053",
+        note: "Sin material.",
+      },
+    ];
+
+    expect(validateSessionExecutionSnapshot(withAnnotations)).toEqual({
+      valid: true,
+      snapshot: withAnnotations,
+    });
+  });
+
+  it("rejects malformed feelings and substitutions", () => {
+    const invalid = structuredClone(snapshot);
+    invalid.feeling = {
+      id: "019b4e0a-0000-4000-8000-000000000061",
+      rpe: 0,
+      pain: 11,
+      unsupported: true,
+    } as never;
+    invalid.blocks[0]!.feeling = {
+      id: "019b4e0a-0000-7000-8000-000000000062",
+    };
+    invalid.blocks[0]!.substitutions = [
+      {
+        id: "019b4e0a-0000-4000-8000-000000000063",
+        plannedPrescriptionId: "not-a-uuid",
+        actualMovementId: "019b4e0a-0000-4000-8000-000000000010",
+      },
+      {
+        id: "019b4e0a-0000-7000-8000-000000000063",
+        plannedPrescriptionId: "019b4e0a-0000-4000-8000-000000000043",
+        actualMovementId: "019b4e0a-0000-4000-8000-000000000010",
+      },
+      {
+        id: "019b4e0a-0000-7000-8000-000000000063",
+        plannedPrescriptionId: "019b4e0a-0000-4000-8000-000000000043",
+        actualMovementId: "019b4e0a-0000-4000-8000-000000000010",
+        extra: true,
+      } as never,
+    ];
+
+    const result = validateSessionExecutionSnapshot(invalid);
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: "feeling.id" }),
+          expect.objectContaining({ path: "feeling.rpe" }),
+          expect.objectContaining({ path: "feeling.pain" }),
+          expect.objectContaining({ path: "feeling.unsupported" }),
+          expect.objectContaining({ path: "blocks[0].feeling" }),
+          expect.objectContaining({ path: "blocks[0].substitutions[0].id" }),
+          expect.objectContaining({ path: "blocks[0].substitutions[0].plannedPrescriptionId" }),
+          expect.objectContaining({ path: "blocks[0].substitutions[2].id" }),
+          expect.objectContaining({ path: "blocks[0].substitutions[2].plannedPrescriptionId" }),
+          expect.objectContaining({ path: "blocks[0].substitutions[2].extra" }),
+        ]),
+      );
+    }
+  });
+
+  it("includes feelings and substitutions in the content hash", () => {
+    const withAnnotations = structuredClone(snapshot);
+    withAnnotations.feeling = {
+      id: "019b4e0a-0000-7000-8000-000000000061",
+      rpe: 7,
+    };
+    withAnnotations.blocks[0]!.substitutions = [
+      {
+        id: "019b4e0a-0000-7000-8000-000000000063",
+        plannedPrescriptionId: "019b4e0a-0000-4000-8000-000000000043",
+        actualMovementId: "019b4e0a-0000-4000-8000-000000000010",
+      },
+    ];
+
+    expect(hashSessionExecution(withAnnotations)).not.toBe(hashSessionExecution(snapshot));
+  });
+
   it("ignores metrics in the hash when the block is marked without metrics", () => {
     const withMetrics = structuredClone(snapshot);
     withMetrics.blocks[0]!.status = "completed";

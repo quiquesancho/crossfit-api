@@ -313,3 +313,62 @@ export const typedMetric = pgTable(
     ),
   ],
 );
+
+export const feeling = pgTable(
+  "feeling",
+  {
+    id: uuid("id").primaryKey(),
+    athleteId: uuid("athlete_id").notNull().references(() => athlete.id),
+    sessionExecutionId: uuid("session_execution_id").references(() => sessionExecution.id, {
+      onDelete: "cascade",
+    }),
+    blockExecutionId: uuid("block_execution_id").references(() => blockExecution.id, {
+      onDelete: "cascade",
+    }),
+    rpe: smallint("rpe"),
+    pain: smallint("pain"),
+    recoveryId: uuid("recovery_id").references(() => catalogEntry.id),
+    techniqueQualityId: uuid("technique_quality_id").references(() => catalogEntry.id),
+    limitationId: uuid("limitation_id").references(() => catalogEntry.id),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("feeling_athlete_idx").on(table.athleteId),
+    index("feeling_session_execution_idx").on(table.sessionExecutionId),
+    index("feeling_block_execution_idx").on(table.blockExecutionId),
+    check(
+      "feeling_scope_check",
+      sql`num_nonnulls(${table.sessionExecutionId}, ${table.blockExecutionId}) = 1`,
+    ),
+    check("feeling_rpe_check", sql`${table.rpe} is null or ${table.rpe} between 1 and 10`),
+    check("feeling_pain_check", sql`${table.pain} is null or ${table.pain} between 0 and 10`),
+  ],
+);
+
+export const substitution = pgTable(
+  "substitution",
+  {
+    id: uuid("id").primaryKey(),
+    blockExecutionId: uuid("block_execution_id")
+      .notNull()
+      .references(() => blockExecution.id, { onDelete: "cascade" }),
+    plannedPrescriptionId: uuid("planned_prescription_id")
+      .notNull()
+      .references(() => prescription.id),
+    actualMovementId: uuid("actual_movement_id")
+      .notNull()
+      .references(() => movement.id),
+    reasonId: uuid("reason_id").references(() => catalogEntry.id),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("substitution_block_prescription_idx").on(
+      table.blockExecutionId,
+      table.plannedPrescriptionId,
+    ),
+    index("substitution_block_execution_idx").on(table.blockExecutionId),
+    index("substitution_actual_movement_idx").on(table.actualMovementId),
+  ],
+);

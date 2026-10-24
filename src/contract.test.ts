@@ -166,6 +166,11 @@ const executionSnapshot = {
   executionDate: "2026-10-20",
   status: "draft" as const,
   generalNote: "Primera sesión",
+  feeling: {
+    id: "019b4e0a-0000-7000-8000-000000000061",
+    rpe: 7,
+    recoveryId: "019b4e0a-0000-4000-8000-000000000051",
+  },
   blocks: [
     {
       id: "019b4e0a-0000-7000-8000-000000000102",
@@ -175,6 +180,19 @@ const executionSnapshot = {
       title: "Fuerza",
       status: "completed_without_metric" as const,
       notes: "Realizado sin anotar la carga.",
+      feeling: {
+        id: "019b4e0a-0000-7000-8000-000000000062",
+        techniqueQualityId: "019b4e0a-0000-4000-8000-000000000052",
+      },
+      substitutions: [
+        {
+          id: "019b4e0a-0000-7000-8000-000000000063",
+          plannedPrescriptionId: "019b4e0a-0000-4000-8000-000000000043",
+          actualMovementId: "019b4e0a-0000-4000-8000-000000000010",
+          reasonId: "019b4e0a-0000-4000-8000-000000000053",
+          note: "Sin material.",
+        },
+      ],
     },
   ],
 };

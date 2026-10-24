@@ -1,8 +1,10 @@
 import type {
   BlockExecutionMetrics,
   BlockExecutionSnapshot,
+  FeelingSnapshot,
   PrescriptionExecutionMetric,
   SessionExecutionSnapshot,
+  SubstitutionSnapshot,
 } from "./execution.types.js";
 
 const RECORDED_STATUSES = new Set<BlockExecutionSnapshot["status"]>([
@@ -10,6 +12,35 @@ const RECORDED_STATUSES = new Set<BlockExecutionSnapshot["status"]>([
   "completed_without_metric",
   "partial",
 ]);
+
+function cleanFeeling(feeling: FeelingSnapshot | undefined): FeelingSnapshot | undefined {
+  if (!feeling) return undefined;
+  const cleaned: FeelingSnapshot = { id: feeling.id };
+  if (feeling.rpe !== undefined) cleaned.rpe = feeling.rpe;
+  if (feeling.pain !== undefined) cleaned.pain = feeling.pain;
+  if (feeling.recoveryId !== undefined) cleaned.recoveryId = feeling.recoveryId;
+  if (feeling.techniqueQualityId !== undefined) {
+    cleaned.techniqueQualityId = feeling.techniqueQualityId;
+  }
+  if (feeling.limitationId !== undefined) cleaned.limitationId = feeling.limitationId;
+  if (feeling.note !== undefined) cleaned.note = feeling.note;
+  return cleaned;
+}
+
+function cleanSubstitutions(
+  substitutions: SubstitutionSnapshot[] | undefined,
+): SubstitutionSnapshot[] | undefined {
+  if (!substitutions || substitutions.length === 0) return undefined;
+  return substitutions
+    .map((substitution) => ({
+      id: substitution.id,
+      plannedPrescriptionId: substitution.plannedPrescriptionId,
+      actualMovementId: substitution.actualMovementId,
+      ...(substitution.reasonId !== undefined ? { reasonId: substitution.reasonId } : {}),
+      ...(substitution.note !== undefined ? { note: substitution.note } : {}),
+    }))
+    .sort((left, right) => left.plannedPrescriptionId.localeCompare(right.plannedPrescriptionId));
+}
 
 function cleanPrescriptionMetric(item: PrescriptionExecutionMetric): PrescriptionExecutionMetric {
   const prescription: PrescriptionExecutionMetric = {
@@ -58,13 +89,21 @@ export function normalizedBlockContent(block: BlockExecutionSnapshot): BlockExec
     withoutMetrics,
     notes: block.notes,
   };
+  const feeling = cleanFeeling(block.feeling);
+  const substitutions = cleanSubstitutions(block.substitutions);
   if (metrics) normalized.metrics = metrics;
+  if (feeling) normalized.feeling = feeling;
+  if (substitutions) normalized.substitutions = substitutions;
   return normalized;
 }
 
 export function normalizedSnapshot(snapshot: SessionExecutionSnapshot): SessionExecutionSnapshot {
-  return {
+  const normalized: SessionExecutionSnapshot = {
     ...snapshot,
     blocks: snapshot.blocks.map(normalizedBlockContent),
   };
+  const feeling = cleanFeeling(snapshot.feeling);
+  if (feeling) normalized.feeling = feeling;
+  else delete normalized.feeling;
+  return normalized;
 }

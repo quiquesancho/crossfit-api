@@ -6,12 +6,15 @@ import {
   blockExecution,
   catalog,
   catalogEntry,
+  feeling,
+  movement,
   planVersion,
   plannedBlock,
   plannedSession,
   plannedWeek,
   prescription,
   sessionExecution,
+  substitution,
   trainingPlan,
   typedMetric,
 } from "../../db/schema.js";
@@ -23,8 +26,75 @@ import {
   ExecutionValidationError,
   type BlockExecutionSnapshot,
   type ExecutionValidationIssue,
+  type FeelingSnapshot,
+  type SessionExecutionSnapshot,
   type SessionExecutionWriter,
+  type SubstitutionSnapshot,
 } from "./execution.types.js";
+
+const FEELING_CATALOG_FIELDS = [
+  { field: "recoveryId", catalogKey: "recovery", label: "recovery entry" },
+  { field: "techniqueQualityId", catalogKey: "technique-quality", label: "technique quality entry" },
+  { field: "limitationId", catalogKey: "limitation", label: "limitation entry" },
+] as const;
+
+type CatalogReference = {
+  id: string;
+  path: string;
+  catalogKey: string;
+  label: string;
+};
+
+function feelingCatalogReferences(
+  value: FeelingSnapshot | undefined,
+  path: string,
+): CatalogReference[] {
+  if (!value) return [];
+  return FEELING_CATALOG_FIELDS.flatMap(({ field, catalogKey, label }) => {
+    const id = value[field];
+    return id === undefined ? [] : [{ id, path: `${path}.${field}`, catalogKey, label }];
+  });
+}
+
+function catalogReferences(content: SessionExecutionSnapshot): CatalogReference[] {
+  const references = feelingCatalogReferences(content.feeling, "feeling");
+  content.blocks.forEach((block, index) => {
+    references.push(...feelingCatalogReferences(block.feeling, `blocks[${index}].feeling`));
+    (block.substitutions ?? []).forEach((item, substitutionIndex) => {
+      if (item.reasonId !== undefined) {
+        references.push({
+          id: item.reasonId,
+          path: `blocks[${index}].substitutions[${substitutionIndex}].reasonId`,
+          catalogKey: "substitution-reason",
+          label: "substitution reason",
+        });
+      }
+    });
+  });
+  return references;
+}
+
+function feelingValues(value: FeelingSnapshot) {
+  return {
+    rpe: value.rpe ?? null,
+    pain: value.pain ?? null,
+    recoveryId: value.recoveryId ?? null,
+    techniqueQualityId: value.techniqueQualityId ?? null,
+    limitationId: value.limitationId ?? null,
+    note: value.note ?? null,
+  };
+}
+
+function substitutionValues(blockId: string, value: SubstitutionSnapshot) {
+  return {
+    id: value.id,
+    blockExecutionId: blockId,
+    plannedPrescriptionId: value.plannedPrescriptionId,
+    actualMovementId: value.actualMovementId,
+    reasonId: value.reasonId ?? null,
+    note: value.note ?? null,
+  };
+}
 
 function missingIssues(references: Array<{ id: string; path: string }>, foundIds: Set<string>, label: string) {
   return references
@@ -192,13 +262,18 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
           );
         }
 
-        const prescriptionReferences = content.blocks.flatMap((block, blockIndex) =>
-          (block.metrics?.prescriptions ?? []).map((item, prescriptionIndex) => ({
+        const prescriptionReferences = content.blocks.flatMap((block, blockIndex) => [
+          ...(block.metrics?.prescriptions ?? []).map((item, prescriptionIndex) => ({
             id: item.plannedPrescriptionId,
             path: `blocks[${blockIndex}].metrics.prescriptions[${prescriptionIndex}].plannedPrescriptionId`,
             plannedBlockId: block.plannedBlockId,
           })),
-        );
+          ...(block.substitutions ?? []).map((item, substitutionIndex) => ({
+            id: item.plannedPrescriptionId,
+            path: `blocks[${blockIndex}].substitutions[${substitutionIndex}].plannedPrescriptionId`,
+            plannedBlockId: block.plannedBlockId,
+          })),
+        ]);
         const checkablePrescriptions = new Set<string>();
         for (const reference of prescriptionReferences) {
           if (!reference.plannedBlockId) {
@@ -233,6 +308,57 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
             }
           }
         }
+        const catalogReferencesToCheck = catalogReferences(content);
+        if (catalogReferencesToCheck.length > 0) {
+          const validEntries = await tx
+            .select({ id: catalogEntry.id, catalogKey: catalog.key })
+            .from(catalogEntry)
+            .innerJoin(catalog, eq(catalogEntry.catalogId, catalog.id))
+            .where(
+              and(
+                eq(catalogEntry.active, true),
+                isNull(catalogEntry.archivedAt),
+                inArray(catalogEntry.id, [...new Set(catalogReferencesToCheck.map(({ id }) => id))]),
+              ),
+            );
+          const catalogKeyById = new Map(validEntries.map(({ id, catalogKey }) => [id, catalogKey]));
+          for (const reference of catalogReferencesToCheck) {
+            const catalogKey = catalogKeyById.get(reference.id);
+            if (catalogKey === undefined) {
+              issues.push({ path: reference.path, message: `Unknown or invalid ${reference.label}.` });
+            } else if (catalogKey !== reference.catalogKey) {
+              issues.push({
+                path: reference.path,
+                message: `Must belong to the ${reference.catalogKey} catalog.`,
+              });
+            }
+          }
+        }
+
+        const substitutionMovementIds = [
+          ...new Set(
+            content.blocks.flatMap((block) =>
+              (block.substitutions ?? []).map((item) => item.actualMovementId),
+            ),
+          ),
+        ];
+        if (substitutionMovementIds.length > 0) {
+          const validMovements = await tx
+            .select({ id: movement.id })
+            .from(movement)
+            .where(and(isNull(movement.archivedAt), inArray(movement.id, substitutionMovementIds)));
+          const validMovementIds = new Set(validMovements.map(({ id }) => id));
+          content.blocks.forEach((block, blockIndex) => {
+            (block.substitutions ?? []).forEach((item, substitutionIndex) => {
+              if (!validMovementIds.has(item.actualMovementId)) {
+                issues.push({
+                  path: `blocks[${blockIndex}].substitutions[${substitutionIndex}].actualMovementId`,
+                  message: "Unknown or invalid actual movement.",
+                });
+              }
+            });
+          });
+        }
         if (issues.length > 0) throw new ExecutionValidationError(issues);
 
         const now = new Date();
@@ -251,6 +377,7 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
         if (existing) {
           await tx.update(sessionExecution).set(executionValues).where(eq(sessionExecution.id, executionId));
           await tx.delete(blockExecution).where(eq(blockExecution.sessionExecutionId, executionId));
+          await tx.delete(feeling).where(eq(feeling.sessionExecutionId, executionId));
         } else {
           await tx.insert(sessionExecution).values({ id: executionId, ...executionValues, createdAt: now });
         }
@@ -271,6 +398,37 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
           typedMetricValues(localAthlete.id, block),
         );
         if (metrics.length > 0) await tx.insert(typedMetric).values(metrics);
+
+        const feelings = [
+          ...(content.feeling
+            ? [
+                {
+                  id: content.feeling.id,
+                  athleteId: localAthlete.id,
+                  sessionExecutionId: executionId,
+                  ...feelingValues(content.feeling),
+                },
+              ]
+            : []),
+          ...content.blocks.flatMap((block) =>
+            block.feeling
+              ? [
+                  {
+                    id: block.feeling.id,
+                    athleteId: localAthlete.id,
+                    blockExecutionId: block.id,
+                    ...feelingValues(block.feeling),
+                  },
+                ]
+              : [],
+          ),
+        ];
+        if (feelings.length > 0) await tx.insert(feeling).values(feelings);
+
+        const substitutions = content.blocks.flatMap((block) =>
+          (block.substitutions ?? []).map((item) => substitutionValues(block.id, item)),
+        );
+        if (substitutions.length > 0) await tx.insert(substitution).values(substitutions);
 
         return {
           id: executionId,
