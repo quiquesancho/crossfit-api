@@ -10,14 +10,18 @@ import {
   plannedBlock,
   plannedSession,
   plannedWeek,
+  prescription,
   sessionExecution,
   trainingPlan,
+  typedMetric,
 } from "../../db/schema.js";
 import { hashSessionExecution } from "./execution.hash.js";
+import { normalizedSnapshot } from "./execution.snapshot.js";
 import {
   ExecutionLocalAthleteNotFoundError,
   ExecutionRevisionConflictError,
   ExecutionValidationError,
+  type BlockExecutionSnapshot,
   type ExecutionValidationIssue,
   type SessionExecutionWriter,
 } from "./execution.types.js";
@@ -28,9 +32,65 @@ function missingIssues(references: Array<{ id: string; path: string }>, foundIds
     .map(({ path }) => ({ path, message: `Unknown or invalid ${label}.` }));
 }
 
+function typedMetricValues(athleteId: string, block: BlockExecutionSnapshot) {
+  if (!block.metrics) return [];
+  const values: Array<{
+    athleteId: string;
+    blockExecutionId: string;
+    metricType: string;
+    numericValue: number;
+    unit: string;
+    context?: Record<string, unknown>;
+  }> = [];
+  if (block.metrics.rounds !== undefined) {
+    values.push({
+      athleteId,
+      blockExecutionId: block.id,
+      metricType: "rounds",
+      numericValue: block.metrics.rounds,
+      unit: "count",
+    });
+  }
+  if (block.metrics.extraRepetitions !== undefined) {
+    values.push({
+      athleteId,
+      blockExecutionId: block.id,
+      metricType: "extra-repetitions",
+      numericValue: block.metrics.extraRepetitions,
+      unit: "count",
+    });
+  }
+  for (const item of block.metrics.prescriptions ?? []) {
+    if (item.actualWeight) {
+      values.push({
+        athleteId,
+        blockExecutionId: block.id,
+        metricType: "weight",
+        numericValue: item.actualWeight.amount,
+        unit: item.actualWeight.unit,
+        context: {
+          plannedPrescriptionId: item.plannedPrescriptionId,
+          ...(item.loadStatus ? { loadStatus: item.loadStatus } : {}),
+        },
+      });
+    } else if (item.loadStatus) {
+      values.push({
+        athleteId,
+        blockExecutionId: block.id,
+        metricType: "load-status",
+        numericValue: item.loadStatus === "rx" ? 1 : 0,
+        unit: "status",
+        context: { plannedPrescriptionId: item.plannedPrescriptionId },
+      });
+    }
+  }
+  return values;
+}
+
 export function createSessionExecutionWriter(database: Database): SessionExecutionWriter {
   return {
     async synchronize(executionId, snapshot) {
+      const content = normalizedSnapshot(snapshot);
       const contentHash = hashSessionExecution(snapshot);
       return database.transaction(async (tx) => {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`execution:${executionId}`}))`);
@@ -70,7 +130,7 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
         }
 
         const issues: ExecutionValidationIssue[] = [];
-        if (snapshot.plannedSessionId) {
+        if (content.plannedSessionId) {
           const [ownedSession] = await tx
             .select({ id: plannedSession.id })
             .from(plannedSession)
@@ -79,7 +139,7 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
             .innerJoin(trainingPlan, eq(planVersion.trainingPlanId, trainingPlan.id))
             .where(
               and(
-                eq(plannedSession.id, snapshot.plannedSessionId),
+                eq(plannedSession.id, content.plannedSessionId),
                 eq(trainingPlan.ownerAthleteId, localAthlete.id),
               ),
             )
@@ -89,7 +149,7 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
           }
         }
 
-        const blockTypeReferences = snapshot.blocks.map((block, index) => ({
+        const blockTypeReferences = content.blocks.map((block, index) => ({
           id: block.blockTypeId,
           path: `blocks[${index}].blockTypeId`,
         }));
@@ -110,16 +170,16 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
           ...missingIssues(blockTypeReferences, new Set(validBlockTypes.map(({ id }) => id)), "block type"),
         );
 
-        const plannedBlockReferences = snapshot.blocks.flatMap((block, index) =>
+        const plannedBlockReferences = content.blocks.flatMap((block, index) =>
           block.plannedBlockId ? [{ id: block.plannedBlockId, path: `blocks[${index}].plannedBlockId` }] : [],
         );
-        if (plannedBlockReferences.length > 0 && snapshot.plannedSessionId) {
+        if (plannedBlockReferences.length > 0 && content.plannedSessionId) {
           const validPlannedBlocks = await tx
             .select({ id: plannedBlock.id })
             .from(plannedBlock)
             .where(
               and(
-                eq(plannedBlock.plannedSessionId, snapshot.plannedSessionId),
+                eq(plannedBlock.plannedSessionId, content.plannedSessionId),
                 inArray(plannedBlock.id, [...new Set(plannedBlockReferences.map(({ id }) => id))]),
               ),
             );
@@ -131,20 +191,62 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
             ),
           );
         }
+
+        const prescriptionReferences = content.blocks.flatMap((block, blockIndex) =>
+          (block.metrics?.prescriptions ?? []).map((item, prescriptionIndex) => ({
+            id: item.plannedPrescriptionId,
+            path: `blocks[${blockIndex}].metrics.prescriptions[${prescriptionIndex}].plannedPrescriptionId`,
+            plannedBlockId: block.plannedBlockId,
+          })),
+        );
+        const checkablePrescriptions = new Set<string>();
+        for (const reference of prescriptionReferences) {
+          if (!reference.plannedBlockId) {
+            issues.push({ path: reference.path, message: "Requires plannedBlockId." });
+          } else if (!content.plannedSessionId) {
+            issues.push({ path: reference.path, message: "Requires plannedSessionId." });
+          } else {
+            checkablePrescriptions.add(reference.id);
+          }
+        }
+        if (checkablePrescriptions.size > 0 && content.plannedSessionId) {
+          const validPrescriptions = await tx
+            .select({ id: prescription.id, plannedBlockId: prescription.plannedBlockId })
+            .from(prescription)
+            .innerJoin(plannedBlock, eq(prescription.plannedBlockId, plannedBlock.id))
+            .where(
+              and(
+                eq(plannedBlock.plannedSessionId, content.plannedSessionId),
+                inArray(prescription.id, [...checkablePrescriptions]),
+              ),
+            );
+          const plannedBlockByPrescription = new Map(
+            validPrescriptions.map(({ id, plannedBlockId }) => [id, plannedBlockId]),
+          );
+          for (const reference of prescriptionReferences) {
+            if (!reference.plannedBlockId || !content.plannedSessionId) continue;
+            if (plannedBlockByPrescription.get(reference.id) !== reference.plannedBlockId) {
+              issues.push({
+                path: reference.path,
+                message: "Unknown planned prescription for the selected block.",
+              });
+            }
+          }
+        }
         if (issues.length > 0) throw new ExecutionValidationError(issues);
 
         const now = new Date();
         const revision = existing ? existing.revision + 1 : 1;
         const executionValues = {
           athleteId: localAthlete.id,
-          plannedSessionId: snapshot.plannedSessionId,
-          executionDate: snapshot.executionDate,
-          status: snapshot.status,
+          plannedSessionId: content.plannedSessionId,
+          executionDate: content.executionDate,
+          status: content.status,
           revision,
           contentHash,
-          generalNote: snapshot.generalNote,
+          generalNote: content.generalNote,
           updatedAt: now,
-          annulledAt: snapshot.status === "annulled" ? now : null,
+          annulledAt: content.status === "annulled" ? now : null,
         };
         if (existing) {
           await tx.update(sessionExecution).set(executionValues).where(eq(sessionExecution.id, executionId));
@@ -153,16 +255,27 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
           await tx.insert(sessionExecution).values({ id: executionId, ...executionValues, createdAt: now });
         }
         await tx.insert(blockExecution).values(
-          snapshot.blocks.map((block) => ({
-            ...block,
+          content.blocks.map((block) => ({
+            id: block.id,
             sessionExecutionId: executionId,
+            plannedBlockId: block.plannedBlockId,
+            position: block.position,
+            blockTypeId: block.blockTypeId,
+            title: block.title,
+            status: block.status,
+            withoutMetrics: block.withoutMetrics,
+            notes: block.notes,
           })),
         );
+        const metrics = content.blocks.flatMap((block) =>
+          typedMetricValues(localAthlete.id, block),
+        );
+        if (metrics.length > 0) await tx.insert(typedMetric).values(metrics);
 
         return {
           id: executionId,
           revision,
-          status: snapshot.status,
+          status: content.status,
           updatedAt: now.toISOString(),
           result: "persisted",
         };
