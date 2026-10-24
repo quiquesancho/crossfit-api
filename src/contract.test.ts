@@ -262,4 +262,30 @@ describe("execution synchronization conforms to the contract", () => {
     expect(response.statusCode).toBe(200);
     expectValid(responseValidator("/session-executions/{executionId}", "put", 200), response.json());
   });
+
+  it("accepts the without-metrics modifier and block metrics", () => {
+    const snapshot = {
+      ...structuredClone(executionSnapshot),
+      blocks: [
+        {
+          ...executionSnapshot.blocks[0]!,
+          status: "completed" as const,
+          withoutMetrics: false,
+          metrics: {
+            rounds: 5,
+            extraRepetitions: 12,
+            prescriptions: [
+              {
+                plannedPrescriptionId: "019b4e0a-0000-7000-8000-000000000043",
+                actualWeight: { amount: 55, unit: "kg" },
+                loadStatus: "scaled" as const,
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    expectValid(requestValidator("/session-executions/{executionId}", "put"), snapshot);
+  });
 });

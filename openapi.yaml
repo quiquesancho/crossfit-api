@@ -158,7 +158,11 @@ paths:
   /session-executions/{executionId}:
     put:
       summary: Create or replace one complete session execution
-      description: Idempotent full-snapshot PWA synchronization. Omitted nested records are removed from the persisted execution. Until user authentication exists, the API assigns the local athlete profile.
+      description: >-
+        Idempotent full-snapshot PWA synchronization. Omitted nested records are removed
+        from the persisted execution. Until user authentication exists, the API assigns
+        the local athlete profile. Metrics are persisted only for blocks marked
+        `completed` or `partial` and are ignored when `withoutMetrics` is true.
       parameters:
         - name: executionId
           in: path
@@ -426,7 +430,42 @@ components:
               blockTypeId: { type: string, format: uuid }
               title: { type: string, minLength: 1 }
               status: { type: string, enum: [draft, completed, completed_without_metric, partial, skipped, abandoned] }
+              withoutMetrics: { type: boolean, default: false }
               notes: { type: string }
+              metrics: { $ref: '#/components/schemas/BlockExecutionMetricsWrite' }
+    BlockExecutionMetricsWrite:
+      type: object
+      additionalProperties: false
+      properties:
+        rounds:
+          type: integer
+          minimum: 0
+          description: Completed AMRAP rounds.
+        extraRepetitions:
+          type: integer
+          minimum: 0
+          description: Repetitions completed in the current AMRAP round.
+        prescriptions:
+          type: array
+          items: { $ref: '#/components/schemas/PrescriptionExecutionMetricWrite' }
+    PrescriptionExecutionMetricWrite:
+      type: object
+      additionalProperties: false
+      required: [plannedPrescriptionId]
+      properties:
+        plannedPrescriptionId: { type: string, format: uuid }
+        actualWeight: { $ref: '#/components/schemas/ActualWeightWrite' }
+        loadStatus: { type: string, enum: [rx, scaled] }
+      anyOf:
+        - required: [actualWeight]
+        - required: [loadStatus]
+    ActualWeightWrite:
+      type: object
+      additionalProperties: false
+      required: [amount, unit]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0 }
+        unit: { type: string, minLength: 1, maxLength: 16, example: kg }
     SessionExecutionResult:
       type: object
       required: [id, revision, status, updatedAt, result]

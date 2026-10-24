@@ -6,6 +6,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   smallint,
   text,
@@ -261,6 +262,7 @@ export const blockExecution = pgTable(
     blockTypeId: uuid("block_type_id").notNull().references(() => catalogEntry.id),
     title: text("title").notNull(),
     status: text("status").notNull(),
+    withoutMetrics: boolean("without_metrics").notNull().default(false),
     notes: text("notes"),
   },
   (table) => [
@@ -270,6 +272,44 @@ export const blockExecution = pgTable(
     check(
       "block_execution_status_check",
       sql`${table.status} in ('draft', 'completed', 'completed_without_metric', 'partial', 'skipped', 'abandoned')`,
+    ),
+  ],
+);
+
+export const typedMetric = pgTable(
+  "typed_metric",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    athleteId: uuid("athlete_id").notNull().references(() => athlete.id),
+    blockExecutionId: uuid("block_execution_id")
+      .notNull()
+      .references(() => blockExecution.id, { onDelete: "cascade" }),
+    metricType: text("metric_type").notNull(),
+    numericValue: numeric("numeric_value", { precision: 10, scale: 3, mode: "number" }).notNull(),
+    unit: text("unit").notNull(),
+    context: jsonb("context").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("typed_metric_athlete_type_idx").on(table.athleteId, table.metricType),
+    index("typed_metric_block_idx").on(table.blockExecutionId),
+    check(
+      "typed_metric_metric_type_check",
+      sql`${table.metricType} in ('rounds', 'extra-repetitions', 'weight', 'load-status')`,
+    ),
+    check("typed_metric_unit_check", sql`${table.unit} in ('count', 'kg', 'lb', 'status')`),
+    check("typed_metric_numeric_value_check", sql`${table.numericValue} >= 0`),
+    check(
+      "typed_metric_weight_value_check",
+      sql`${table.metricType} <> 'weight' or ${table.numericValue} > 0`,
+    ),
+    check(
+      "typed_metric_count_value_check",
+      sql`${table.metricType} not in ('rounds', 'extra-repetitions') or ${table.numericValue} = trunc(${table.numericValue})`,
+    ),
+    check(
+      "typed_metric_status_value_check",
+      sql`${table.metricType} <> 'load-status' or ${table.numericValue} in (0, 1)`,
     ),
   ],
 );

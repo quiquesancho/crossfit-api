@@ -7,6 +7,25 @@ export type BlockExecutionStatus =
   | "skipped"
   | "abandoned";
 
+export type WeightValue = {
+  amount: number;
+  unit: string;
+};
+
+export type LoadStatus = "rx" | "scaled";
+
+export type PrescriptionExecutionMetric = {
+  plannedPrescriptionId: string;
+  actualWeight?: WeightValue;
+  loadStatus?: LoadStatus;
+};
+
+export type BlockExecutionMetrics = {
+  rounds?: number;
+  extraRepetitions?: number;
+  prescriptions?: PrescriptionExecutionMetric[];
+};
+
 export type BlockExecutionSnapshot = {
   id: string;
   plannedBlockId?: string;
@@ -14,7 +33,9 @@ export type BlockExecutionSnapshot = {
   blockTypeId: string;
   title: string;
   status: BlockExecutionStatus;
+  withoutMetrics?: boolean;
   notes?: string;
+  metrics?: BlockExecutionMetrics;
 };
 
 export type SessionExecutionSnapshot = {
