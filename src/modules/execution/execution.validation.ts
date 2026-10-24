@@ -18,6 +18,14 @@ const BLOCK_STATUSES = new Set<BlockExecutionStatus>([
   "skipped",
   "abandoned",
 ]);
+const LOAD_STATUSES = new Set(["rx", "scaled"]);
+const METRIC_KEYS = new Set(["rounds", "extraRepetitions", "prescriptions"]);
+const PRESCRIPTION_METRIC_KEYS = new Set([
+  "plannedPrescriptionId",
+  "actualWeight",
+  "loadStatus",
+]);
+const WEIGHT_KEYS = new Set(["amount", "unit"]);
 
 type ObjectValue = Record<string, unknown>;
 
@@ -39,6 +47,103 @@ function uuidIssue(issues: ExecutionValidationIssue[], value: unknown, path: str
   }
 }
 
+function unsupportedKeyIssues(
+  issues: ExecutionValidationIssue[],
+  value: ObjectValue,
+  allowedKeys: Set<string>,
+  path: string,
+) {
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.has(key)) {
+      issues.push({ path: `${path}.${key}`, message: "Is not supported in this API version." });
+    }
+  }
+}
+
+function validateActualWeight(
+  value: unknown,
+  path: string,
+  issues: ExecutionValidationIssue[],
+): value is { amount: number; unit: string } {
+  if (!isObject(value)) {
+    issues.push({ path, message: "Must be an object." });
+    return false;
+  }
+  unsupportedKeyIssues(issues, value, WEIGHT_KEYS, path);
+  if (
+    typeof value.amount !== "number" ||
+    !Number.isFinite(value.amount) ||
+    value.amount <= 0
+  ) {
+    issues.push({ path: `${path}.amount`, message: "Must be a positive number." });
+  }
+  if (!isNonEmptyString(value.unit) || value.unit.length > 16) {
+    issues.push({
+      path: `${path}.unit`,
+      message: "Must be a non-empty string with at most 16 characters.",
+    });
+  }
+  return true;
+}
+
+function validatePrescriptionMetric(value: unknown, path: string, issues: ExecutionValidationIssue[]) {
+  if (!isObject(value)) {
+    issues.push({ path, message: "Must be an object." });
+    return;
+  }
+  unsupportedKeyIssues(issues, value, PRESCRIPTION_METRIC_KEYS, path);
+  uuidIssue(issues, value.plannedPrescriptionId, `${path}.plannedPrescriptionId`);
+  if (value.actualWeight !== undefined) {
+    validateActualWeight(value.actualWeight, `${path}.actualWeight`, issues);
+  }
+  if (value.loadStatus !== undefined && !LOAD_STATUSES.has(value.loadStatus as string)) {
+    issues.push({ path: `${path}.loadStatus`, message: "Must be rx or scaled." });
+  }
+  if (value.actualWeight === undefined && value.loadStatus === undefined) {
+    issues.push({
+      path,
+      message: "Must include actualWeight or loadStatus.",
+    });
+  }
+}
+
+function validateMetrics(value: unknown, path: string, issues: ExecutionValidationIssue[]) {
+  if (!isObject(value)) {
+    issues.push({ path, message: "Must be an object." });
+    return;
+  }
+  unsupportedKeyIssues(issues, value, METRIC_KEYS, path);
+  for (const key of ["rounds", "extraRepetitions"] as const) {
+    const metric = value[key];
+    if (
+      metric !== undefined &&
+      (typeof metric !== "number" || !Number.isInteger(metric) || metric < 0)
+    ) {
+      issues.push({ path: `${path}.${key}`, message: "Must be a non-negative integer." });
+    }
+  }
+  if (value.prescriptions !== undefined) {
+    if (!Array.isArray(value.prescriptions)) {
+      issues.push({ path: `${path}.prescriptions`, message: "Must be an array." });
+      return;
+    }
+    const seen = new Set<string>();
+    value.prescriptions.forEach((item: unknown, index: number) => {
+      const itemPath = `${path}.prescriptions[${index}]`;
+      validatePrescriptionMetric(item, itemPath, issues);
+      if (isObject(item) && typeof item.plannedPrescriptionId === "string") {
+        if (seen.has(item.plannedPrescriptionId)) {
+          issues.push({
+            path: `${itemPath}.plannedPrescriptionId`,
+            message: "Must be unique within the block.",
+          });
+        }
+        seen.add(item.plannedPrescriptionId);
+      }
+    });
+  }
+}
+
 function validateBlock(value: unknown, path: string, issues: ExecutionValidationIssue[]): value is BlockExecutionSnapshot {
   if (!isObject(value)) {
     issues.push({ path, message: "Must be an object." });
@@ -54,8 +159,12 @@ function validateBlock(value: unknown, path: string, issues: ExecutionValidation
   if (typeof value.status !== "string" || !BLOCK_STATUSES.has(value.status as BlockExecutionStatus)) {
     issues.push({ path: `${path}.status`, message: "Must be a supported block status." });
   }
+  if (value.withoutMetrics !== undefined && typeof value.withoutMetrics !== "boolean") {
+    issues.push({ path: `${path}.withoutMetrics`, message: "Must be a boolean." });
+  }
   optionalStringIssue(issues, value.notes, `${path}.notes`);
-  for (const unsupported of ["attempts", "metrics", "feelings", "substitutions"]) {
+  if (value.metrics !== undefined) validateMetrics(value.metrics, `${path}.metrics`, issues);
+  for (const unsupported of ["attempts", "feelings", "substitutions"]) {
     if (value[unsupported] !== undefined) {
       issues.push({ path: `${path}.${unsupported}`, message: "Is not supported in this API version." });
     }
