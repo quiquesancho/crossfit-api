@@ -44,8 +44,6 @@ const catalogs: CatalogSeed[] = [
       { code: "warmup", description: "Calentamiento" },
       { code: "technique", description: "Técnica" },
       { code: "strength", description: "Fuerza" },
-      { code: "weightlifting", description: "Halterofilia" },
-      { code: "gymnastics", description: "Gimnasia" },
       { code: "wod", description: "WOD" },
     ],
   },
