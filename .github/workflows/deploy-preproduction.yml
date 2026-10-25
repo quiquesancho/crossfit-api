@@ -151,10 +151,16 @@ jobs:
             --env-file /opt/crossfit/preproduction/.env \
             -f /opt/crossfit/crossfit-deploy/environments/preproduction/docker-compose.yml \
             exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' <<'SQL'
-          DELETE FROM catalog_entry
+          SELECT ce.code, count(be.id) AS executions
+          FROM block_execution be
+          JOIN catalog_entry ce ON ce.id = be.block_type_id
+          GROUP BY ce.code
+          ORDER BY ce.code;
+          UPDATE catalog_entry
+          SET active = false, archived_at = now()
           WHERE catalog_id = (SELECT id FROM catalog WHERE key = 'block-type')
             AND code IN ('weightlifting', 'gymnastics');
-          SELECT ce.code, ce.description, ce.active, ce.display_order
+          SELECT ce.code, ce.description, ce.active, ce.archived_at IS NOT NULL AS archived
           FROM catalog_entry ce
           JOIN catalog c ON c.id = ce.catalog_id
           WHERE c.key = 'block-type'
