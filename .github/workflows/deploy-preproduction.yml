@@ -19,6 +19,7 @@ on:
           - dump-execution-data
           - reset-execution-data
           - seed-example-week
+          - remove-block-types
       week_start:
         description: ISO Monday of the example week (seed-example-week only)
         required: false
@@ -141,6 +142,24 @@ jobs:
             run --rm --no-deps \
             -e PLANNING_EXAMPLE_WEEK_START="$WEEK_START" \
             api node dist/db/seed-planning-example.js
+
+      - name: Remove unused block types
+        if: inputs.maintenance == 'remove-block-types'
+        run: |
+          set -euo pipefail
+          docker compose \
+            --env-file /opt/crossfit/preproduction/.env \
+            -f /opt/crossfit/crossfit-deploy/environments/preproduction/docker-compose.yml \
+            exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' <<'SQL'
+          DELETE FROM catalog_entry
+          WHERE catalog_id = (SELECT id FROM catalog WHERE key = 'block-type')
+            AND code IN ('weightlifting', 'gymnastics');
+          SELECT ce.code, ce.description, ce.active, ce.display_order
+          FROM catalog_entry ce
+          JOIN catalog c ON c.id = ce.catalog_id
+          WHERE c.key = 'block-type'
+          ORDER BY ce.display_order;
+          SQL
 
   image:
     if: inputs.maintenance == 'none'
