@@ -276,14 +276,51 @@ export const blockExecution = pgTable(
   ],
 );
 
+export const setAttempt = pgTable(
+  "set_attempt",
+  {
+    id: uuid("id").primaryKey(),
+    blockExecutionId: uuid("block_execution_id")
+      .notNull()
+      .references(() => blockExecution.id, { onDelete: "cascade" }),
+    plannedPrescriptionId: uuid("planned_prescription_id").references(() => prescription.id),
+    position: integer("position").notNull(),
+    movementId: uuid("movement_id").references(() => movement.id),
+    complexVersionId: uuid("complex_version_id").references(() => complexVersion.id),
+    status: text("status").notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("set_attempt_block_position_idx").on(table.blockExecutionId, table.position),
+    index("set_attempt_block_execution_idx").on(table.blockExecutionId),
+    index("set_attempt_planned_prescription_idx").on(table.plannedPrescriptionId),
+    index("set_attempt_movement_idx").on(table.movementId),
+    check("set_attempt_position_check", sql`${table.position} > 0`),
+    check(
+      "set_attempt_status_check",
+      sql`${table.status} in ('completed', 'partial', 'failed', 'skipped')`,
+    ),
+    check(
+      "set_attempt_reference_check",
+      sql`num_nonnulls(${table.movementId}, ${table.complexVersionId}) <= 1`,
+    ),
+    check(
+      "set_attempt_anchor_check",
+      sql`${table.plannedPrescriptionId} is not null or num_nonnulls(${table.movementId}, ${table.complexVersionId}) = 1`,
+    ),
+  ],
+);
+
 export const typedMetric = pgTable(
   "typed_metric",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     athleteId: uuid("athlete_id").notNull().references(() => athlete.id),
-    blockExecutionId: uuid("block_execution_id")
-      .notNull()
-      .references(() => blockExecution.id, { onDelete: "cascade" }),
+    blockExecutionId: uuid("block_execution_id").references(() => blockExecution.id, {
+      onDelete: "cascade",
+    }),
+    setAttemptId: uuid("set_attempt_id").references(() => setAttempt.id, { onDelete: "cascade" }),
     metricType: text("metric_type").notNull(),
     numericValue: numeric("numeric_value", { precision: 10, scale: 3, mode: "number" }).notNull(),
     unit: text("unit").notNull(),
@@ -293,9 +330,14 @@ export const typedMetric = pgTable(
   (table) => [
     index("typed_metric_athlete_type_idx").on(table.athleteId, table.metricType),
     index("typed_metric_block_idx").on(table.blockExecutionId),
+    index("typed_metric_set_attempt_idx").on(table.setAttemptId),
+    check(
+      "typed_metric_scope_check",
+      sql`num_nonnulls(${table.blockExecutionId}, ${table.setAttemptId}) = 1`,
+    ),
     check(
       "typed_metric_metric_type_check",
-      sql`${table.metricType} in ('rounds', 'extra-repetitions', 'weight', 'load-status')`,
+      sql`${table.metricType} in ('rounds', 'extra-repetitions', 'repetitions', 'weight', 'load-status')`,
     ),
     check("typed_metric_unit_check", sql`${table.unit} in ('count', 'kg', 'lb', 'status')`),
     check("typed_metric_numeric_value_check", sql`${table.numericValue} >= 0`),
@@ -305,7 +347,7 @@ export const typedMetric = pgTable(
     ),
     check(
       "typed_metric_count_value_check",
-      sql`${table.metricType} not in ('rounds', 'extra-repetitions') or ${table.numericValue} = trunc(${table.numericValue})`,
+      sql`${table.metricType} not in ('rounds', 'extra-repetitions', 'repetitions') or ${table.numericValue} = trunc(${table.numericValue})`,
     ),
     check(
       "typed_metric_status_value_check",

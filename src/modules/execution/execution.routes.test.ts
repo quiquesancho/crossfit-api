@@ -187,6 +187,121 @@ describe("execution snapshot validation", () => {
     );
   });
 
+  it("accepts set attempts and includes them in the content hash", () => {
+    const withAttempts = structuredClone(snapshot);
+    withAttempts.blocks[0]!.status = "completed";
+    withAttempts.blocks[0]!.attempts = [
+      {
+        id: "019b4e0a-0000-7000-8000-000000000071",
+        plannedPrescriptionId: "019b4e0a-0000-4000-8000-000000000043",
+        position: 1,
+        status: "completed",
+        weight: { amount: 60, unit: "kg" },
+        repetitions: 4,
+        note: "Buena serie.",
+      },
+    ];
+
+    expect(validateSessionExecutionSnapshot(withAttempts)).toEqual({
+      valid: true,
+      snapshot: withAttempts,
+    });
+    expect(hashSessionExecution(withAttempts)).not.toBe(hashSessionExecution(snapshot));
+  });
+
+  it("rejects malformed set attempts", () => {
+    const invalid = structuredClone(snapshot);
+    invalid.blocks[0]!.status = "completed";
+    invalid.blocks[0]!.attempts = [
+      {
+        id: "019b4e0a-0000-4000-8000-000000000071",
+        position: 0,
+        status: "done" as never,
+        repetitions: -1,
+        weight: { amount: 0, unit: "" },
+        unsupported: true,
+      } as never,
+      {
+        id: "019b4e0a-0000-7000-8000-000000000071",
+        plannedPrescriptionId: "019b4e0a-0000-4000-8000-000000000043",
+        movementId: "019b4e0a-0000-4000-8000-000000000010",
+        position: 1,
+        status: "completed",
+      },
+    ];
+
+    const result = validateSessionExecutionSnapshot(invalid);
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: "blocks[0].attempts[0].id" }),
+          expect.objectContaining({ path: "blocks[0].attempts[0].position" }),
+          expect.objectContaining({ path: "blocks[0].attempts[0].status" }),
+          expect.objectContaining({ path: "blocks[0].attempts[0].repetitions" }),
+          expect.objectContaining({ path: "blocks[0].attempts[0].weight.amount" }),
+          expect.objectContaining({ path: "blocks[0].attempts[0].unsupported" }),
+          expect.objectContaining({ path: "blocks[0].attempts[0]" }),
+          expect.objectContaining({ path: "blocks[0].attempts[1]" }),
+        ]),
+      );
+    }
+  });
+
+  it("rejects duplicate attempt ids and positions within a block", () => {
+    const invalid = structuredClone(snapshot);
+    invalid.blocks[0]!.status = "completed";
+    invalid.blocks[0]!.attempts = [
+      {
+        id: "019b4e0a-0000-7000-8000-000000000071",
+        movementId: "019b4e0a-0000-4000-8000-000000000010",
+        position: 1,
+        status: "completed",
+      },
+      {
+        id: "019b4e0a-0000-7000-8000-000000000071",
+        movementId: "019b4e0a-0000-4000-8000-000000000010",
+        position: 1,
+        status: "completed",
+      },
+    ];
+
+    const result = validateSessionExecutionSnapshot(invalid);
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: "blocks[0].attempts[1].id" }),
+          expect.objectContaining({ path: "blocks[0].attempts[1].position" }),
+        ]),
+      );
+    }
+  });
+
+  it("ignores attempts in the hash when the block is marked without metrics", () => {
+    const withAttempts = structuredClone(snapshot);
+    withAttempts.blocks[0]!.status = "completed";
+    withAttempts.blocks[0]!.attempts = [
+      {
+        id: "019b4e0a-0000-7000-8000-000000000071",
+        movementId: "019b4e0a-0000-4000-8000-000000000010",
+        position: 1,
+        status: "completed",
+      },
+    ];
+    const withoutMetrics = structuredClone(withAttempts);
+    withoutMetrics.blocks[0]!.withoutMetrics = true;
+
+    expect(hashSessionExecution(withoutMetrics)).toBe(
+      hashSessionExecution({
+        ...withAttempts,
+        blocks: [{ ...withAttempts.blocks[0]!, attempts: undefined, withoutMetrics: true }],
+      }),
+    );
+  });
+
   it("rejects malformed block metrics", () => {
     const invalid = structuredClone(snapshot);
     invalid.blocks[0]!.metrics = {

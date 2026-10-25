@@ -161,8 +161,8 @@ paths:
       description: >-
         Idempotent full-snapshot PWA synchronization. Omitted nested records are removed
         from the persisted execution. Until user authentication exists, the API assigns
-        the local athlete profile. Metrics are persisted only for blocks marked
-        `completed` or `partial` and are ignored when `withoutMetrics` is true.
+        the local athlete profile. Metrics and attempts are persisted only for blocks
+        marked `completed` or `partial` and are ignored when `withoutMetrics` is true.
       parameters:
         - name: executionId
           in: path
@@ -434,6 +434,9 @@ components:
               withoutMetrics: { type: boolean, default: false }
               notes: { type: string }
               metrics: { $ref: '#/components/schemas/BlockExecutionMetricsWrite' }
+              attempts:
+                type: array
+                items: { $ref: '#/components/schemas/SetAttemptWrite' }
               feeling: { $ref: '#/components/schemas/FeelingWrite' }
               substitutions:
                 type: array
@@ -482,32 +485,30 @@ components:
         result: { type: string, enum: [persisted, unchanged] }
     SetAttemptWrite:
       type: object
+      additionalProperties: false
       required: [id, position, status]
+      description: >-
+        One performed set or attempt. A prescribed attempt references
+        `plannedPrescriptionId`; the API resolves the actual movement from the block
+        substitution when one exists, otherwise from the prescription. A free attempt
+        references exactly one of `movementId` or `complexVersionId`.
       properties:
-        id: { type: string, format: uuid }
+        id:
+          type: string
+          format: uuid
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+        plannedPrescriptionId: { type: string, format: uuid }
         position: { type: integer, minimum: 1 }
         movementId: { type: string, format: uuid }
         complexVersionId: { type: string, format: uuid }
         status: { type: string, enum: [completed, partial, failed, skipped] }
         note: { type: string }
-        metrics:
-          type: array
-          items: { $ref: '#/components/schemas/MetricWrite' }
+        weight: { $ref: '#/components/schemas/ActualWeightWrite' }
+        repetitions: { type: integer, minimum: 0 }
       oneOf:
+        - required: [plannedPrescriptionId]
         - required: [movementId]
         - required: [complexVersionId]
-    MetricWrite:
-      type: object
-      required: [id, metricTypeId, numericValue, unitId]
-      properties:
-        id: { type: string, format: uuid }
-        metricTypeId: { type: string, format: uuid }
-        numericValue: { type: number }
-        unitId: { type: string, format: uuid }
-        context:
-          type: object
-          description: Metric-type-specific context validated by the backend.
-          additionalProperties: true
     FeelingWrite:
       type: object
       additionalProperties: false

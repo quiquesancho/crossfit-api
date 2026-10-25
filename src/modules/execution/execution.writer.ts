@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "../../db/client.js";
 import {
@@ -6,6 +6,7 @@ import {
   blockExecution,
   catalog,
   catalogEntry,
+  complexVersion,
   feeling,
   movement,
   planVersion,
@@ -14,6 +15,7 @@ import {
   plannedWeek,
   prescription,
   sessionExecution,
+  setAttempt,
   substitution,
   trainingPlan,
   typedMetric,
@@ -29,6 +31,7 @@ import {
   type FeelingSnapshot,
   type SessionExecutionSnapshot,
   type SessionExecutionWriter,
+  type SetAttemptSnapshot,
   type SubstitutionSnapshot,
 } from "./execution.types.js";
 
@@ -157,6 +160,35 @@ function typedMetricValues(athleteId: string, block: BlockExecutionSnapshot) {
   return values;
 }
 
+function attemptMetricValues(athleteId: string, attempt: SetAttemptSnapshot) {
+  const values: Array<{
+    athleteId: string;
+    setAttemptId: string;
+    metricType: string;
+    numericValue: number;
+    unit: string;
+  }> = [];
+  if (attempt.weight) {
+    values.push({
+      athleteId,
+      setAttemptId: attempt.id,
+      metricType: "weight",
+      numericValue: attempt.weight.amount,
+      unit: attempt.weight.unit,
+    });
+  }
+  if (attempt.repetitions !== undefined) {
+    values.push({
+      athleteId,
+      setAttemptId: attempt.id,
+      metricType: "repetitions",
+      numericValue: attempt.repetitions,
+      unit: "count",
+    });
+  }
+  return values;
+}
+
 export function createSessionExecutionWriter(database: Database): SessionExecutionWriter {
   return {
     async synchronize(executionId, snapshot) {
@@ -273,7 +305,22 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
             path: `blocks[${blockIndex}].substitutions[${substitutionIndex}].plannedPrescriptionId`,
             plannedBlockId: block.plannedBlockId,
           })),
+          ...(block.attempts ?? []).flatMap((item, attemptIndex) =>
+            item.plannedPrescriptionId
+              ? [
+                  {
+                    id: item.plannedPrescriptionId,
+                    path: `blocks[${blockIndex}].attempts[${attemptIndex}].plannedPrescriptionId`,
+                    plannedBlockId: block.plannedBlockId,
+                  },
+                ]
+              : [],
+          ),
         ]);
+        const plannedPrescriptionDetails = new Map<
+          string,
+          { movementId: string | null; complexVersionId: string | null }
+        >();
         const checkablePrescriptions = new Set<string>();
         for (const reference of prescriptionReferences) {
           if (!reference.plannedBlockId) {
@@ -286,7 +333,12 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
         }
         if (checkablePrescriptions.size > 0 && content.plannedSessionId) {
           const validPrescriptions = await tx
-            .select({ id: prescription.id, plannedBlockId: prescription.plannedBlockId })
+            .select({
+              id: prescription.id,
+              plannedBlockId: prescription.plannedBlockId,
+              movementId: prescription.movementId,
+              complexVersionId: prescription.complexVersionId,
+            })
             .from(prescription)
             .innerJoin(plannedBlock, eq(prescription.plannedBlockId, plannedBlock.id))
             .where(
@@ -307,6 +359,78 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
               });
             }
           }
+          for (const row of validPrescriptions) {
+            plannedPrescriptionDetails.set(row.id, {
+              movementId: row.movementId,
+              complexVersionId: row.complexVersionId,
+            });
+          }
+        }
+
+        const explicitAttemptMovementReferences = content.blocks.flatMap((block, blockIndex) =>
+          (block.attempts ?? []).flatMap((attempt, attemptIndex) =>
+            attempt.movementId
+              ? [
+                  {
+                    id: attempt.movementId,
+                    path: `blocks[${blockIndex}].attempts[${attemptIndex}].movementId`,
+                  },
+                ]
+              : [],
+          ),
+        );
+        if (explicitAttemptMovementReferences.length > 0) {
+          const validAttemptMovements = await tx
+            .select({ id: movement.id })
+            .from(movement)
+            .where(
+              and(
+                isNull(movement.archivedAt),
+                inArray(movement.id, [
+                  ...new Set(explicitAttemptMovementReferences.map(({ id }) => id)),
+                ]),
+              ),
+            );
+          issues.push(
+            ...missingIssues(
+              explicitAttemptMovementReferences,
+              new Set(validAttemptMovements.map(({ id }) => id)),
+              "movement",
+            ),
+          );
+        }
+
+        const explicitAttemptComplexReferences = content.blocks.flatMap((block, blockIndex) =>
+          (block.attempts ?? []).flatMap((attempt, attemptIndex) =>
+            attempt.complexVersionId
+              ? [
+                  {
+                    id: attempt.complexVersionId,
+                    path: `blocks[${blockIndex}].attempts[${attemptIndex}].complexVersionId`,
+                  },
+                ]
+              : [],
+          ),
+        );
+        if (explicitAttemptComplexReferences.length > 0) {
+          const validAttemptComplexes = await tx
+            .select({ id: complexVersion.id })
+            .from(complexVersion)
+            .where(
+              and(
+                ne(complexVersion.status, "archived"),
+                inArray(complexVersion.id, [
+                  ...new Set(explicitAttemptComplexReferences.map(({ id }) => id)),
+                ]),
+              ),
+            );
+          issues.push(
+            ...missingIssues(
+              explicitAttemptComplexReferences,
+              new Set(validAttemptComplexes.map(({ id }) => id)),
+              "complex version",
+            ),
+          );
         }
         const catalogReferencesToCheck = catalogReferences(content);
         if (catalogReferencesToCheck.length > 0) {
@@ -359,6 +483,37 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
             });
           });
         }
+        const resolvedAttempts = content.blocks.flatMap((block, blockIndex) =>
+          (block.attempts ?? []).map((attempt, attemptIndex) => {
+            let movementId = attempt.movementId ?? null;
+            let complexVersionId = attempt.complexVersionId ?? null;
+            if (attempt.plannedPrescriptionId) {
+              const substitution = (block.substitutions ?? []).find(
+                (item) => item.plannedPrescriptionId === attempt.plannedPrescriptionId,
+              );
+              if (substitution) {
+                movementId = substitution.actualMovementId;
+                complexVersionId = null;
+              } else {
+                const planned = plannedPrescriptionDetails.get(attempt.plannedPrescriptionId);
+                movementId = planned?.movementId ?? null;
+                complexVersionId = planned?.complexVersionId ?? null;
+              }
+            }
+            if (!movementId && !complexVersionId) {
+              issues.push({
+                path: `blocks[${blockIndex}].attempts[${attemptIndex}]`,
+                message: "Requires a movement or complex.",
+              });
+            }
+            return {
+              blockId: block.id,
+              attempt,
+              movementId,
+              complexVersionId,
+            };
+          }),
+        );
         if (issues.length > 0) throw new ExecutionValidationError(issues);
 
         const now = new Date();
@@ -394,9 +549,26 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
             notes: block.notes,
           })),
         );
-        const metrics = content.blocks.flatMap((block) =>
-          typedMetricValues(localAthlete.id, block),
-        );
+        if (resolvedAttempts.length > 0) {
+          await tx.insert(setAttempt).values(
+            resolvedAttempts.map(({ blockId, attempt, movementId, complexVersionId }) => ({
+              id: attempt.id,
+              blockExecutionId: blockId,
+              plannedPrescriptionId: attempt.plannedPrescriptionId ?? null,
+              position: attempt.position,
+              movementId,
+              complexVersionId,
+              status: attempt.status,
+              note: attempt.note ?? null,
+            })),
+          );
+        }
+        const metrics = [
+          ...content.blocks.flatMap((block) => typedMetricValues(localAthlete.id, block)),
+          ...resolvedAttempts.flatMap(({ attempt }) =>
+            attemptMetricValues(localAthlete.id, attempt),
+          ),
+        ];
         if (metrics.length > 0) await tx.insert(typedMetric).values(metrics);
 
         const feelings = [

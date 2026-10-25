@@ -4,6 +4,7 @@ import type {
   FeelingSnapshot,
   PrescriptionExecutionMetric,
   SessionExecutionSnapshot,
+  SetAttemptSnapshot,
   SubstitutionSnapshot,
 } from "./execution.types.js";
 
@@ -42,6 +43,30 @@ function cleanSubstitutions(
     .sort((left, right) => left.plannedPrescriptionId.localeCompare(right.plannedPrescriptionId));
 }
 
+function cleanAttempt(attempt: SetAttemptSnapshot): SetAttemptSnapshot {
+  const cleaned: SetAttemptSnapshot = {
+    id: attempt.id,
+    position: attempt.position,
+    status: attempt.status,
+  };
+  if (attempt.plannedPrescriptionId !== undefined) {
+    cleaned.plannedPrescriptionId = attempt.plannedPrescriptionId;
+  }
+  if (attempt.movementId !== undefined) cleaned.movementId = attempt.movementId;
+  if (attempt.complexVersionId !== undefined) cleaned.complexVersionId = attempt.complexVersionId;
+  if (attempt.note !== undefined) cleaned.note = attempt.note;
+  if (attempt.weight !== undefined) cleaned.weight = { ...attempt.weight };
+  if (attempt.repetitions !== undefined) cleaned.repetitions = attempt.repetitions;
+  return cleaned;
+}
+
+function cleanAttempts(attempts: SetAttemptSnapshot[] | undefined): SetAttemptSnapshot[] | undefined {
+  if (!attempts || attempts.length === 0) return undefined;
+  return attempts
+    .map(cleanAttempt)
+    .sort((left, right) => left.position - right.position);
+}
+
 function cleanPrescriptionMetric(item: PrescriptionExecutionMetric): PrescriptionExecutionMetric {
   const prescription: PrescriptionExecutionMetric = {
     plannedPrescriptionId: item.plannedPrescriptionId,
@@ -75,10 +100,9 @@ export function blockWithoutMetrics(block: BlockExecutionSnapshot): boolean {
 
 export function normalizedBlockContent(block: BlockExecutionSnapshot): BlockExecutionSnapshot {
   const withoutMetrics = blockWithoutMetrics(block);
-  const metrics =
-    RECORDED_STATUSES.has(block.status) && !withoutMetrics
-      ? cleanBlockMetrics(block.metrics)
-      : undefined;
+  const recorded = RECORDED_STATUSES.has(block.status);
+  const metrics = recorded && !withoutMetrics ? cleanBlockMetrics(block.metrics) : undefined;
+  const attempts = recorded && !withoutMetrics ? cleanAttempts(block.attempts) : undefined;
   const normalized: BlockExecutionSnapshot = {
     id: block.id,
     plannedBlockId: block.plannedBlockId,
@@ -92,6 +116,7 @@ export function normalizedBlockContent(block: BlockExecutionSnapshot): BlockExec
   const feeling = cleanFeeling(block.feeling);
   const substitutions = cleanSubstitutions(block.substitutions);
   if (metrics) normalized.metrics = metrics;
+  if (attempts) normalized.attempts = attempts;
   if (feeling) normalized.feeling = feeling;
   if (substitutions) normalized.substitutions = substitutions;
   return normalized;
