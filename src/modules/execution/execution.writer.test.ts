@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "../../db/client.js";
-import { blockExecution, sessionExecution, typedMetric } from "../../db/schema.js";
+import { blockExecution, feeling, sessionExecution, substitution, typedMetric } from "../../db/schema.js";
 import { hashSessionExecution } from "./execution.hash.js";
 import {
   ExecutionLocalAthleteNotFoundError,
@@ -215,6 +215,155 @@ describe("session execution writer", () => {
     }
   });
 
+  it("persists session feelings, block feelings and substitutions", async () => {
+    const prescriptionId = "019b4e0a-0000-4000-8000-000000000043";
+    const recoveryId = "019b4e0a-0000-4000-8000-000000000051";
+    const techniqueQualityId = "019b4e0a-0000-4000-8000-000000000052";
+    const reasonId = "019b4e0a-0000-4000-8000-000000000053";
+    const actualMovementId = "019b4e0a-0000-4000-8000-000000000010";
+    const withFeelings: SessionExecutionSnapshot = {
+      ...snapshot,
+      feeling: {
+        id: "019b4e0a-0000-7000-8000-000000000061",
+        rpe: 7,
+        recoveryId,
+      },
+      blocks: [
+        {
+          ...snapshot.blocks[0]!,
+          status: "completed",
+          feeling: {
+            id: "019b4e0a-0000-7000-8000-000000000062",
+            rpe: 8,
+            techniqueQualityId,
+            note: "Buen ritmo.",
+          },
+          substitutions: [
+            {
+              id: "019b4e0a-0000-7000-8000-000000000063",
+              plannedPrescriptionId: prescriptionId,
+              actualMovementId,
+              reasonId,
+              note: "Cambio por material.",
+            },
+          ],
+        },
+      ],
+    };
+    const { database, inserts } = fakeDatabase([
+      [{ id: "athlete-id" }],
+      [],
+      [{ id: withFeelings.plannedSessionId }],
+      [{ id: withFeelings.blocks[0]!.blockTypeId }],
+      [{ id: withFeelings.blocks[0]!.plannedBlockId }],
+      [{ id: prescriptionId, plannedBlockId: withFeelings.blocks[0]!.plannedBlockId }],
+      [
+        { id: recoveryId, catalogKey: "recovery" },
+        { id: techniqueQualityId, catalogKey: "technique-quality" },
+        { id: reasonId, catalogKey: "substitution-reason" },
+      ],
+      [{ id: actualMovementId }],
+    ]);
+
+    const result = await createSessionExecutionWriter(database).synchronize(
+      executionId,
+      withFeelings,
+    );
+
+    expect(result).toEqual(expect.objectContaining({ revision: 1, result: "persisted" }));
+    expect(inserts.map(({ table }) => table)).toEqual([
+      sessionExecution,
+      blockExecution,
+      feeling,
+      substitution,
+    ]);
+    expect(inserts[2]?.values).toEqual([
+      {
+        id: "019b4e0a-0000-7000-8000-000000000061",
+        athleteId: "athlete-id",
+        sessionExecutionId: executionId,
+        rpe: 7,
+        pain: null,
+        recoveryId,
+        techniqueQualityId: null,
+        limitationId: null,
+        note: null,
+      },
+      {
+        id: "019b4e0a-0000-7000-8000-000000000062",
+        athleteId: "athlete-id",
+        blockExecutionId: withFeelings.blocks[0]!.id,
+        rpe: 8,
+        pain: null,
+        recoveryId: null,
+        techniqueQualityId,
+        limitationId: null,
+        note: "Buen ritmo.",
+      },
+    ]);
+    expect(inserts[3]?.values).toEqual([
+      {
+        id: "019b4e0a-0000-7000-8000-000000000063",
+        blockExecutionId: withFeelings.blocks[0]!.id,
+        plannedPrescriptionId: prescriptionId,
+        actualMovementId,
+        reasonId,
+        note: "Cambio por material.",
+      },
+    ]);
+  });
+
+  it("rejects catalog values from another catalog and unknown substitution movements", async () => {
+    const prescriptionId = "019b4e0a-0000-4000-8000-000000000043";
+    const recoveryId = "019b4e0a-0000-4000-8000-000000000051";
+    const reasonId = "019b4e0a-0000-4000-8000-000000000053";
+    const actualMovementId = "019b4e0a-0000-4000-8000-000000000010";
+    const invalid: SessionExecutionSnapshot = {
+      ...snapshot,
+      feeling: { id: "019b4e0a-0000-7000-8000-000000000061", recoveryId },
+      blocks: [
+        {
+          ...snapshot.blocks[0]!,
+          substitutions: [
+            {
+              id: "019b4e0a-0000-7000-8000-000000000063",
+              plannedPrescriptionId: prescriptionId,
+              actualMovementId,
+              reasonId,
+            },
+          ],
+        },
+      ],
+    };
+    const { database } = fakeDatabase([
+      [{ id: "athlete-id" }],
+      [],
+      [{ id: invalid.plannedSessionId }],
+      [{ id: invalid.blocks[0]!.blockTypeId }],
+      [{ id: invalid.blocks[0]!.plannedBlockId }],
+      [{ id: prescriptionId, plannedBlockId: invalid.blocks[0]!.plannedBlockId }],
+      [{ id: recoveryId, catalogKey: "limitation" }],
+      [],
+    ]);
+
+    await expect(
+      createSessionExecutionWriter(database).synchronize(executionId, invalid),
+    ).rejects.toMatchObject({
+      constructor: ExecutionValidationError,
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          path: "feeling.recoveryId",
+          message: "Must belong to the recovery catalog.",
+        }),
+        expect.objectContaining({
+          path: "blocks[0].substitutions[0].actualMovementId",
+          message: "Unknown or invalid actual movement.",
+        }),
+      ]),
+    });
+  });
+
+
   it("rejects a prescription that belongs to another planned block", async () => {
     const prescriptionId = "019b4e0a-0000-4000-8000-000000000043";
     const withMetrics: SessionExecutionSnapshot = {
@@ -315,7 +464,7 @@ describe("session execution writer", () => {
 
     expect(result).toEqual(expect.objectContaining({ revision: 2, result: "persisted" }));
     expect(updates).toEqual([expect.objectContaining({ table: sessionExecution })]);
-    expect(deletes).toEqual([blockExecution]);
+    expect(deletes).toEqual([blockExecution, feeling]);
     expect(inserts.map(({ table }) => table)).toEqual([blockExecution]);
   });
 

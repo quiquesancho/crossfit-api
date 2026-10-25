@@ -26,6 +26,24 @@ export type BlockExecutionMetrics = {
   prescriptions?: PrescriptionExecutionMetric[];
 };
 
+export type FeelingSnapshot = {
+  id: string;
+  rpe?: number;
+  pain?: number;
+  recoveryId?: string;
+  techniqueQualityId?: string;
+  limitationId?: string;
+  note?: string;
+};
+
+export type SubstitutionSnapshot = {
+  id: string;
+  plannedPrescriptionId: string;
+  actualMovementId: string;
+  reasonId?: string;
+  note?: string;
+};
+
 export type BlockExecutionSnapshot = {
   id: string;
   plannedBlockId?: string;
@@ -36,6 +54,8 @@ export type BlockExecutionSnapshot = {
   withoutMetrics?: boolean;
   notes?: string;
   metrics?: BlockExecutionMetrics;
+  feeling?: FeelingSnapshot;
+  substitutions?: SubstitutionSnapshot[];
 };
 
 export type SessionExecutionSnapshot = {
@@ -44,6 +64,7 @@ export type SessionExecutionSnapshot = {
   executionDate: string;
   status: SessionExecutionStatus;
   generalNote?: string;
+  feeling?: FeelingSnapshot;
   blocks: BlockExecutionSnapshot[];
 };
 

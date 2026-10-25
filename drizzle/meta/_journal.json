@@ -43,6 +43,13 @@
       "when": 1792845224061,
       "tag": "0005_exotic_praxagora",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792869379793,
+      "tag": "0006_damp_starjammers",
+      "breakpoints": true
     }
   ]
 }
