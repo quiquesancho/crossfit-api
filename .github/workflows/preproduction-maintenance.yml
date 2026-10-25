@@ -1,0 +1,103 @@
+name: Preproduction maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Maintenance action to run against preproduction
+        required: true
+        type: choice
+        options:
+          - reset-execution-data
+          - list-execution-data
+          - seed-example-week
+      week_start:
+        description: ISO Monday of the example week (seed-example-week only)
+        required: false
+        default: ""
+        type: string
+      confirm:
+        description: Type PRE to confirm the action
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  maintenance:
+    if: inputs.confirm == 'PRE'
+    runs-on: [self-hosted, raspberrypi, preproduction]
+    environment: preproduction
+    concurrency: preproduction-maintenance
+    steps:
+      - name: Check environment
+        run: |
+          set -euo pipefail
+          test -f /opt/crossfit/preproduction/.env
+          test -f /opt/crossfit/crossfit-deploy/environments/preproduction/docker-compose.yml
+          docker compose \
+            --env-file /opt/crossfit/preproduction/.env \
+            -f /opt/crossfit/crossfit-deploy/environments/preproduction/docker-compose.yml \
+            ps
+
+      - name: List execution data
+        if: inputs.action == 'list-execution-data' || inputs.action == 'reset-execution-data'
+        run: |
+          set -euo pipefail
+          docker compose \
+            --env-file /opt/crossfit/preproduction/.env \
+            -f /opt/crossfit/crossfit-deploy/environments/preproduction/docker-compose.yml \
+            exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' <<'SQL'
+          SELECT 'session_execution' AS relation, count(*) AS rows FROM session_execution
+          UNION ALL SELECT 'block_execution', count(*) FROM block_execution
+          UNION ALL SELECT 'set_attempt', count(*) FROM set_attempt
+          UNION ALL SELECT 'typed_metric', count(*) FROM typed_metric
+          UNION ALL SELECT 'feeling', count(*) FROM feeling
+          UNION ALL SELECT 'substitution', count(*) FROM substitution
+          UNION ALL SELECT 'planned_week', count(*) FROM planned_week
+          UNION ALL SELECT 'plan_version', count(*) FROM plan_version
+          ORDER BY relation;
+          SQL
+
+      - name: Reset execution data
+        if: inputs.action == 'reset-execution-data'
+        run: |
+          set -euo pipefail
+          docker compose \
+            --env-file /opt/crossfit/preproduction/.env \
+            -f /opt/crossfit/crossfit-deploy/environments/preproduction/docker-compose.yml \
+            exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' <<'SQL'
+          BEGIN;
+          DELETE FROM typed_metric;
+          DELETE FROM feeling;
+          DELETE FROM substitution;
+          DELETE FROM set_attempt;
+          DELETE FROM block_execution;
+          DELETE FROM session_execution;
+          COMMIT;
+          SELECT 'session_execution' AS relation, count(*) AS rows FROM session_execution
+          UNION ALL SELECT 'block_execution', count(*) FROM block_execution
+          UNION ALL SELECT 'set_attempt', count(*) FROM set_attempt
+          UNION ALL SELECT 'typed_metric', count(*) FROM typed_metric
+          UNION ALL SELECT 'feeling', count(*) FROM feeling
+          UNION ALL SELECT 'substitution', count(*) FROM substitution
+          ORDER BY relation;
+          SQL
+
+      - name: Seed example planning week
+        if: inputs.action == 'seed-example-week'
+        env:
+          WEEK_START: ${{ inputs.week_start }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WEEK_START" ]; then
+            echo "week_start is required for seed-example-week"
+            exit 1
+          fi
+          docker compose \
+            --env-file /opt/crossfit/preproduction/.env \
+            -f /opt/crossfit/crossfit-deploy/environments/preproduction/docker-compose.yml \
+            run --rm --no-deps \
+            -e PLANNING_EXAMPLE_WEEK_START="$WEEK_START" \
+            api node dist/db/seed-planning-example.js
