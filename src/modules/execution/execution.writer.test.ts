@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "../../db/client.js";
-import { blockExecution, feeling, sessionExecution, substitution, typedMetric } from "../../db/schema.js";
+import { blockExecution, feeling, sessionExecution, setAttempt, substitution, typedMetric } from "../../db/schema.js";
 import { hashSessionExecution } from "./execution.hash.js";
 import {
   ExecutionLocalAthleteNotFoundError,
@@ -435,6 +435,278 @@ describe("session execution writer", () => {
         expect.objectContaining({
           path: "blocks[0].metrics.prescriptions[0].plannedPrescriptionId",
           message: "Requires plannedBlockId.",
+        }),
+      ],
+    });
+  });
+
+  it("persists set attempts with their typed metrics", async () => {
+    const prescriptionId = "019b4e0a-0000-4000-8000-000000000043";
+    const movementId = "019b4e0a-0000-4000-8000-000000000010";
+    const withAttempts: SessionExecutionSnapshot = {
+      ...snapshot,
+      blocks: [
+        {
+          ...snapshot.blocks[0]!,
+          status: "completed",
+          attempts: [
+            {
+              id: "019b4e0a-0000-7000-8000-000000000071",
+              plannedPrescriptionId: prescriptionId,
+              position: 1,
+              status: "completed",
+              weight: { amount: 60, unit: "kg" },
+              repetitions: 4,
+              note: "Técnica sólida.",
+            },
+            {
+              id: "019b4e0a-0000-7000-8000-000000000072",
+              plannedPrescriptionId: prescriptionId,
+              position: 2,
+              status: "failed",
+            },
+          ],
+        },
+      ],
+    };
+    const { database, inserts } = fakeDatabase([
+      [{ id: "athlete-id" }],
+      [],
+      [{ id: withAttempts.plannedSessionId }],
+      [{ id: withAttempts.blocks[0]!.blockTypeId }],
+      [{ id: withAttempts.blocks[0]!.plannedBlockId }],
+      [{ id: prescriptionId, plannedBlockId: withAttempts.blocks[0]!.plannedBlockId, movementId, complexVersionId: null }],
+    ]);
+
+    const result = await createSessionExecutionWriter(database).synchronize(executionId, withAttempts);
+
+    expect(result).toEqual(expect.objectContaining({ revision: 1, result: "persisted" }));
+    expect(inserts.map(({ table }) => table)).toEqual([
+      sessionExecution,
+      blockExecution,
+      setAttempt,
+      typedMetric,
+    ]);
+    expect(inserts[2]?.values).toEqual([
+      {
+        id: "019b4e0a-0000-7000-8000-000000000071",
+        blockExecutionId: withAttempts.blocks[0]!.id,
+        plannedPrescriptionId: prescriptionId,
+        position: 1,
+        movementId,
+        complexVersionId: null,
+        status: "completed",
+        note: "Técnica sólida.",
+      },
+      {
+        id: "019b4e0a-0000-7000-8000-000000000072",
+        blockExecutionId: withAttempts.blocks[0]!.id,
+        plannedPrescriptionId: prescriptionId,
+        position: 2,
+        movementId,
+        complexVersionId: null,
+        status: "failed",
+        note: null,
+      },
+    ]);
+    expect(inserts[3]?.values).toEqual([
+      {
+        athleteId: "athlete-id",
+        setAttemptId: "019b4e0a-0000-7000-8000-000000000071",
+        metricType: "weight",
+        numericValue: 60,
+        unit: "kg",
+      },
+      {
+        athleteId: "athlete-id",
+        setAttemptId: "019b4e0a-0000-7000-8000-000000000071",
+        metricType: "repetitions",
+        numericValue: 4,
+        unit: "count",
+      },
+    ]);
+  });
+
+  it("uses the substituted movement for a prescribed attempt", async () => {
+    const prescriptionId = "019b4e0a-0000-4000-8000-000000000043";
+    const plannedMovementId = "019b4e0a-0000-4000-8000-000000000010";
+    const actualMovementId = "019b4e0a-0000-4000-8000-000000000011";
+    const withAttempts: SessionExecutionSnapshot = {
+      ...snapshot,
+      blocks: [
+        {
+          ...snapshot.blocks[0]!,
+          status: "completed",
+          substitutions: [
+            {
+              id: "019b4e0a-0000-7000-8000-000000000063",
+              plannedPrescriptionId: prescriptionId,
+              actualMovementId,
+            },
+          ],
+          attempts: [
+            {
+              id: "019b4e0a-0000-7000-8000-000000000071",
+              plannedPrescriptionId: prescriptionId,
+              position: 1,
+              status: "completed",
+            },
+          ],
+        },
+      ],
+    };
+    const { database, inserts } = fakeDatabase([
+      [{ id: "athlete-id" }],
+      [],
+      [{ id: withAttempts.plannedSessionId }],
+      [{ id: withAttempts.blocks[0]!.blockTypeId }],
+      [{ id: withAttempts.blocks[0]!.plannedBlockId }],
+      [
+        {
+          id: prescriptionId,
+          plannedBlockId: withAttempts.blocks[0]!.plannedBlockId,
+          movementId: plannedMovementId,
+          complexVersionId: null,
+        },
+      ],
+      [{ id: actualMovementId }],
+    ]);
+
+    await createSessionExecutionWriter(database).synchronize(executionId, withAttempts);
+
+    const attempts = inserts.find(({ table }) => table === setAttempt)?.values as Array<
+      Record<string, unknown>
+    >;
+    expect(attempts[0]).toEqual(
+      expect.objectContaining({ movementId: actualMovementId, complexVersionId: null }),
+    );
+  });
+
+  it("rejects an attempt whose prescription belongs to another block", async () => {
+    const prescriptionId = "019b4e0a-0000-4000-8000-000000000043";
+    const withAttempts: SessionExecutionSnapshot = {
+      ...snapshot,
+      blocks: [
+        {
+          ...snapshot.blocks[0]!,
+          status: "completed",
+          attempts: [
+            {
+              id: "019b4e0a-0000-7000-8000-000000000071",
+              plannedPrescriptionId: prescriptionId,
+              position: 1,
+              status: "completed",
+            },
+          ],
+        },
+      ],
+    };
+    const { database } = fakeDatabase([
+      [{ id: "athlete-id" }],
+      [],
+      [{ id: withAttempts.plannedSessionId }],
+      [{ id: withAttempts.blocks[0]!.blockTypeId }],
+      [{ id: withAttempts.blocks[0]!.plannedBlockId }],
+      [{ id: prescriptionId, plannedBlockId: "019b4e0a-0000-7000-8000-000000000099" }],
+    ]);
+
+    await expect(
+      createSessionExecutionWriter(database).synchronize(executionId, withAttempts),
+    ).rejects.toMatchObject({
+      constructor: ExecutionValidationError,
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          path: "blocks[0].attempts[0].plannedPrescriptionId",
+        }),
+      ]),
+    });
+  });
+
+  it("rejects an attempt for a prescription without movement or complex", async () => {
+    const prescriptionId = "019b4e0a-0000-4000-8000-000000000043";
+    const withAttempts: SessionExecutionSnapshot = {
+      ...snapshot,
+      blocks: [
+        {
+          ...snapshot.blocks[0]!,
+          status: "completed",
+          attempts: [
+            {
+              id: "019b4e0a-0000-7000-8000-000000000071",
+              plannedPrescriptionId: prescriptionId,
+              position: 1,
+              status: "completed",
+            },
+          ],
+        },
+      ],
+    };
+    const { database } = fakeDatabase([
+      [{ id: "athlete-id" }],
+      [],
+      [{ id: withAttempts.plannedSessionId }],
+      [{ id: withAttempts.blocks[0]!.blockTypeId }],
+      [{ id: withAttempts.blocks[0]!.plannedBlockId }],
+      [
+        {
+          id: prescriptionId,
+          plannedBlockId: withAttempts.blocks[0]!.plannedBlockId,
+          movementId: null,
+          complexVersionId: null,
+        },
+      ],
+    ]);
+
+    await expect(
+      createSessionExecutionWriter(database).synchronize(executionId, withAttempts),
+    ).rejects.toMatchObject({
+      constructor: ExecutionValidationError,
+      issues: [
+        expect.objectContaining({
+          path: "blocks[0].attempts[0]",
+          message: "Requires a movement or complex.",
+        }),
+      ],
+    });
+  });
+
+  it("rejects an attempt with an unknown explicit movement", async () => {
+    const freeSnapshot: SessionExecutionSnapshot = {
+      ...snapshot,
+      plannedSessionId: undefined,
+      blocks: [
+        {
+          id: snapshot.blocks[0]!.id,
+          position: 1,
+          blockTypeId: snapshot.blocks[0]!.blockTypeId,
+          title: "Entrenamiento libre",
+          status: "completed",
+          attempts: [
+            {
+              id: "019b4e0a-0000-7000-8000-000000000071",
+              movementId: "019b4e0a-0000-4000-8000-000000000010",
+              position: 1,
+              status: "completed",
+            },
+          ],
+        },
+      ],
+    };
+    const { database } = fakeDatabase([
+      [{ id: "athlete-id" }],
+      [],
+      [{ id: freeSnapshot.blocks[0]!.blockTypeId }],
+      [],
+    ]);
+
+    await expect(
+      createSessionExecutionWriter(database).synchronize(executionId, freeSnapshot),
+    ).rejects.toMatchObject({
+      constructor: ExecutionValidationError,
+      issues: [
+        expect.objectContaining({
+          path: "blocks[0].attempts[0].movementId",
+          message: "Unknown or invalid movement.",
         }),
       ],
     });

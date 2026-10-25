@@ -5,6 +5,7 @@ import type {
   FeelingSnapshot,
   SessionExecutionSnapshot,
   SessionExecutionStatus,
+  SetAttemptSnapshot,
   SubstitutionSnapshot,
 } from "./execution.types.js";
 import { isIsoDate } from "../planning/planning.validation.js";
@@ -21,11 +22,23 @@ const BLOCK_STATUSES = new Set<BlockExecutionStatus>([
   "abandoned",
 ]);
 const LOAD_STATUSES = new Set(["rx", "scaled"]);
+const ATTEMPT_STATUSES = new Set(["completed", "partial", "failed", "skipped"]);
 const METRIC_KEYS = new Set(["rounds", "extraRepetitions", "prescriptions"]);
 const PRESCRIPTION_METRIC_KEYS = new Set([
   "plannedPrescriptionId",
   "actualWeight",
   "loadStatus",
+]);
+const ATTEMPT_KEYS = new Set([
+  "id",
+  "plannedPrescriptionId",
+  "position",
+  "movementId",
+  "complexVersionId",
+  "status",
+  "note",
+  "weight",
+  "repetitions",
 ]);
 const WEIGHT_KEYS = new Set(["amount", "unit"]);
 const FEELING_KEYS = new Set([
@@ -254,6 +267,80 @@ function validateSubstitutions(
   });
 }
 
+function validateAttempt(
+  value: unknown,
+  path: string,
+  issues: ExecutionValidationIssue[],
+): value is SetAttemptSnapshot {
+  if (!isObject(value)) {
+    issues.push({ path, message: "Must be an object." });
+    return false;
+  }
+  unsupportedKeyIssues(issues, value, ATTEMPT_KEYS, path);
+  uuidIssue(issues, value.id, `${path}.id`, true);
+  if (!Number.isInteger(value.position) || Number(value.position) <= 0) {
+    issues.push({ path: `${path}.position`, message: "Must be a positive integer." });
+  }
+  if (typeof value.status !== "string" || !ATTEMPT_STATUSES.has(value.status)) {
+    issues.push({ path: `${path}.status`, message: "Must be a supported attempt status." });
+  }
+  if (value.plannedPrescriptionId !== undefined) {
+    uuidIssue(issues, value.plannedPrescriptionId, `${path}.plannedPrescriptionId`);
+  }
+  if (value.movementId !== undefined) uuidIssue(issues, value.movementId, `${path}.movementId`);
+  if (value.complexVersionId !== undefined) {
+    uuidIssue(issues, value.complexVersionId, `${path}.complexVersionId`);
+  }
+  const anchors = [
+    value.plannedPrescriptionId,
+    value.movementId,
+    value.complexVersionId,
+  ].filter((anchor) => anchor !== undefined).length;
+  if (anchors !== 1) {
+    issues.push({
+      path,
+      message: "Must reference exactly one of plannedPrescriptionId, movementId or complexVersionId.",
+    });
+  }
+  optionalStringIssue(issues, value.note, `${path}.note`);
+  if (value.weight !== undefined) {
+    validateActualWeight(value.weight, `${path}.weight`, issues);
+  }
+  if (
+    value.repetitions !== undefined &&
+    (typeof value.repetitions !== "number" ||
+      !Number.isInteger(value.repetitions) ||
+      value.repetitions < 0)
+  ) {
+    issues.push({ path: `${path}.repetitions`, message: "Must be a non-negative integer." });
+  }
+  return true;
+}
+
+function validateAttempts(value: unknown, path: string, issues: ExecutionValidationIssue[]) {
+  if (!Array.isArray(value)) {
+    issues.push({ path, message: "Must be an array." });
+    return;
+  }
+  const ids = new Set<string>();
+  const positions = new Set<number>();
+  value.forEach((item: unknown, index: number) => {
+    const itemPath = `${path}[${index}]`;
+    validateAttempt(item, itemPath, issues);
+    if (!isObject(item)) return;
+    if (typeof item.id === "string") {
+      if (ids.has(item.id)) issues.push({ path: `${itemPath}.id`, message: "Must be unique." });
+      ids.add(item.id);
+    }
+    if (typeof item.position === "number") {
+      if (positions.has(item.position)) {
+        issues.push({ path: `${itemPath}.position`, message: "Must be unique within the block." });
+      }
+      positions.add(item.position);
+    }
+  });
+}
+
 function validateBlock(value: unknown, path: string, issues: ExecutionValidationIssue[]): value is BlockExecutionSnapshot {
   if (!isObject(value)) {
     issues.push({ path, message: "Must be an object." });
@@ -274,11 +361,12 @@ function validateBlock(value: unknown, path: string, issues: ExecutionValidation
   }
   optionalStringIssue(issues, value.notes, `${path}.notes`);
   if (value.metrics !== undefined) validateMetrics(value.metrics, `${path}.metrics`, issues);
+  if (value.attempts !== undefined) validateAttempts(value.attempts, `${path}.attempts`, issues);
   if (value.feeling !== undefined) validateFeeling(value.feeling, `${path}.feeling`, issues);
   if (value.substitutions !== undefined) {
     validateSubstitutions(value.substitutions, `${path}.substitutions`, issues);
   }
-  for (const unsupported of ["attempts", "feelings", "setAttempts"]) {
+  for (const unsupported of ["feelings", "setAttempts"]) {
     if (value[unsupported] !== undefined) {
       issues.push({ path: `${path}.${unsupported}`, message: "Is not supported in this API version." });
     }
@@ -313,6 +401,7 @@ export function validateSessionExecutionSnapshot(value: unknown):
     value.blocks.forEach((block, index) => validateBlock(block, `blocks[${index}]`, issues));
   }
   const ids = new Set<string>();
+  const attemptIds = new Set<string>();
   const positions = new Set<number>();
   if (Array.isArray(value.blocks)) {
     value.blocks.forEach((block, index) => {
@@ -320,6 +409,18 @@ export function validateSessionExecutionSnapshot(value: unknown):
       if (typeof block.id === "string") {
         if (ids.has(block.id)) issues.push({ path: `blocks[${index}].id`, message: "Must be unique." });
         ids.add(block.id);
+      }
+      if (Array.isArray(block.attempts)) {
+        block.attempts.forEach((attempt: unknown, attemptIndex: number) => {
+          if (!isObject(attempt) || typeof attempt.id !== "string") return;
+          if (attemptIds.has(attempt.id)) {
+            issues.push({
+              path: `blocks[${index}].attempts[${attemptIndex}].id`,
+              message: "Must be unique within the execution.",
+            });
+          }
+          attemptIds.add(attempt.id);
+        });
       }
       if (typeof block.position === "number") {
         if (positions.has(block.position)) {
