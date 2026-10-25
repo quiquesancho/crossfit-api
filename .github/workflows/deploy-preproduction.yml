@@ -16,6 +16,7 @@ on:
         options:
           - none
           - list-execution-data
+          - dump-execution-data
           - reset-execution-data
           - seed-example-week
       week_start:
@@ -67,6 +68,36 @@ jobs:
           UNION ALL SELECT 'planned_week', count(*) FROM planned_week
           UNION ALL SELECT 'plan_version', count(*) FROM plan_version
           ORDER BY relation;
+          SQL
+
+      - name: Dump execution data
+        if: inputs.maintenance == 'dump-execution-data'
+        run: |
+          set -euo pipefail
+          docker compose \
+            --env-file /opt/crossfit/preproduction/.env \
+            -f /opt/crossfit/crossfit-deploy/environments/preproduction/docker-compose.yml \
+            exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' <<'SQL'
+          SELECT se.id, se.revision, se.execution_date, se.updated_at
+          FROM session_execution se
+          ORDER BY se.updated_at DESC
+          LIMIT 3;
+
+          SELECT be.title AS block,
+                 sa.position AS set_position,
+                 sa.status AS set_status,
+                 COALESCE(m.code, 'prescription-only') AS anchored_movement,
+                 COALESCE(pm.code, '') AS prescribed_movement,
+                 tm.metric_type,
+                 tm.numeric_value,
+                 tm.unit
+          FROM set_attempt sa
+          JOIN block_execution be ON be.id = sa.block_execution_id
+          LEFT JOIN movement m ON m.id = sa.movement_id
+          LEFT JOIN prescription p ON p.id = sa.planned_prescription_id
+          LEFT JOIN movement pm ON pm.id = p.movement_id
+          LEFT JOIN typed_metric tm ON tm.set_attempt_id = sa.id
+          ORDER BY be.title, sa.position, tm.metric_type;
           SQL
 
       - name: Reset execution data
