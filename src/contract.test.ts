@@ -159,6 +159,54 @@ const planningWeekReader = {
   }),
 };
 
+const executionHistoryReader = {
+  listExecutions: async () => ({
+    items: [
+      {
+        id: "019b4e0a-0000-7000-8000-000000000101",
+        executionDate: "2026-10-20",
+        status: "completed" as const,
+        origin: "planned" as const,
+        title: "Fuerza y WOD",
+        plannedSessionId: "019b4e0a-0000-7000-8000-000000000041",
+        blockCount: 2,
+        rpe: 8,
+        revision: 2,
+        updatedAt: "2026-10-20T13:00:00.000Z",
+      },
+    ],
+    nextCursor: null,
+  }),
+  getCalendar: async () => ({
+    days: [
+      {
+        date: "2026-10-20",
+        planned: [
+          {
+            id: "019b4e0a-0000-7000-8000-000000000041",
+            title: "Fuerza y WOD",
+            objective: "Mantener una técnica sólida.",
+          },
+        ],
+        executions: [
+          {
+            id: "019b4e0a-0000-7000-8000-000000000101",
+            executionDate: "2026-10-20",
+            status: "completed" as const,
+            origin: "planned" as const,
+            title: "Fuerza y WOD",
+            plannedSessionId: "019b4e0a-0000-7000-8000-000000000041",
+            blockCount: 2,
+            rpe: 8,
+            revision: 2,
+            updatedAt: "2026-10-20T13:00:00.000Z",
+          },
+        ],
+      },
+    ],
+  }),
+};
+
 const executionId = "019b4e0a-0000-7000-8000-000000000101";
 const executionSnapshot = {
   baseRevision: 0,
@@ -262,6 +310,31 @@ describe("planning responses conform to the contract", () => {
       responseValidator("/integrations/openclaw/training-plans/{externalPlanId}", "put", 201),
       response.json(),
     );
+  });
+});
+
+describe("execution history conforms to the contract", () => {
+  const app = buildApp({ executionHistoryReader });
+  afterAll(async () => app.close());
+
+  it("GET /session-executions", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/session-executions?from=2026-10-01&to=2026-10-31",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(responseValidator("/session-executions", "get", 200), response.json());
+  });
+
+  it("GET /calendar", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/calendar?from=2026-10-01&to=2026-10-31",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(responseValidator("/calendar", "get", 200), response.json());
   });
 });
 

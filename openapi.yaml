@@ -23,13 +23,9 @@ paths:
           description: Planned and completed training by date
           content:
             application/json:
-              schema:
-                type: object
-                required: [days]
-                properties:
-                  days:
-                    type: array
-                    items: { $ref: '#/components/schemas/CalendarDay' }
+              schema: { $ref: '#/components/schemas/CalendarResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '503': { description: History query service unavailable }
   /planning/weeks/{weekStart}:
     get:
       summary: Get the active planning week for the current athlete
@@ -66,6 +62,11 @@ paths:
       responses:
         '200':
           description: Cursor-paginated execution summaries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecutionHistoryPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '503': { description: History query service unavailable }
   /personal-records:
     get:
       summary: List confirmed personal records for the current athlete
@@ -314,31 +315,70 @@ components:
         code: { type: string }
         name: { type: string }
         versionNumber: { type: integer, minimum: 1 }
+    CalendarResponse:
+      type: object
+      required: [days]
+      properties:
+        days:
+          type: array
+          items: { $ref: '#/components/schemas/CalendarDay' }
     CalendarDay:
       type: object
-      required: [date, plannedSessions, executions]
+      required: [date, planned, executions]
       properties:
         date: { type: string, format: date }
-        plannedSessions:
+        planned:
           type: array
-          items:
-            type: object
-            required: [id, title]
-            properties:
-              id: { type: string, format: uuid }
-              title: { type: string }
-              primaryBlockTypeId: { type: string, format: uuid }
+          items: { $ref: '#/components/schemas/CalendarPlannedSession' }
         executions:
           type: array
-          items:
-            type: object
-            required: [id, status]
-            properties:
-              id: { type: string, format: uuid }
-              status: { type: string }
-              rpe: { type: integer, minimum: 1, maximum: 10 }
-              plannedSessionId: { type: string, format: uuid }
-              syncStatus: { type: string, enum: [synchronized, pending, error] }
+          items: { $ref: '#/components/schemas/ExecutionSummary' }
+    CalendarPlannedSession:
+      type: object
+      required: [id, title, objective]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        objective: { type: [string, 'null'] }
+    ExecutionSummary:
+      type: object
+      required:
+        - id
+        - executionDate
+        - status
+        - origin
+        - title
+        - plannedSessionId
+        - blockCount
+        - rpe
+        - revision
+        - updatedAt
+      properties:
+        id: { type: string, format: uuid }
+        executionDate: { type: string, format: date }
+        status: { type: string, enum: [draft, completed] }
+        origin: { type: string, enum: [planned, free] }
+        title: { type: string }
+        plannedSessionId:
+          type: [string, 'null']
+          format: uuid
+        blockCount: { type: integer, minimum: 0 }
+        rpe:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 10
+        revision: { type: integer, minimum: 1 }
+        updatedAt: { type: string, format: date-time }
+    ExecutionHistoryPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ExecutionSummary' }
+        nextCursor:
+          type: [string, 'null']
+          description: Opaque cursor for the next page; `null` on the last page.
     PlanningPublication:
       type: object
       required: [sourceVersion, title, weeks]
