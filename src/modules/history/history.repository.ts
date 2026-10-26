@@ -223,7 +223,7 @@ export function createExecutionHistoryReader(database: Database): ExecutionHisto
       ]);
 
       const dates = new Set<string>([...plannedByDate.keys(), ...rows.map((row) => row.executionDate)]);
-      const days = [...dates].sort().map((date) => ({
+      const days = [...dates].sort((a, b) => a.localeCompare(b)).map((date) => ({
         date,
         planned: plannedByDate.get(date) ?? [],
         executions: rows
