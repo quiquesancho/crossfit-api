@@ -69,11 +69,21 @@ paths:
         '503': { description: History query service unavailable }
   /personal-records:
     get:
-      summary: List confirmed personal records for the current athlete
+      summary: List personal record history for the current athlete
+      description: >-
+        By default returns confirmed and discarded records. Suggested records are
+        returned by `/personal-records/suggestions`. The history is cursor-paginated
+        in reverse chronological order.
       parameters:
         - name: movementId
           in: query
           schema: { type: string, format: uuid }
+        - name: complexVersionId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [suggested, confirmed, discarded] }
         - name: cursor
           in: query
           schema: { type: string }
@@ -81,7 +91,100 @@ paths:
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
       responses:
-        '200': { description: Cursor-paginated personal record history and current references }
+        '200':
+          description: Cursor-paginated personal record history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PersonalRecordPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '503': { description: Personal record service unavailable }
+  /personal-records/current:
+    get:
+      summary: List current confirmed personal records for the current athlete
+      description: >-
+        Returns one record per anchor and repetition count: the highest confirmed
+        load, with the earliest achievement winning ties.
+      responses:
+        '200':
+          description: Current personal records
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records]
+                properties:
+                  records:
+                    type: array
+                    items: { $ref: '#/components/schemas/PersonalRecord' }
+        '503': { description: Personal record service unavailable }
+  /personal-records/suggestions:
+    get:
+      summary: List pending personal record suggestions for the current athlete
+      description: >-
+        Returns the best pending suggestion per anchor and repetition count when it
+        beats the current confirmed record. Suggestions are generated from completed
+        attempts synchronized with a completed session.
+      responses:
+        '200':
+          description: Pending suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PersonalRecord' }
+        '503': { description: Personal record service unavailable }
+  /personal-records/{recordId}:
+    put:
+      summary: Create or update a manual historical personal record
+      description: >-
+        Idempotent client-generated UUID. Manual records are confirmed immediately and
+        are not linked to a set attempt. Only manual records can be updated.
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PersonalRecordManualInput' }
+      responses:
+        '200':
+          description: Manual record persisted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PersonalRecord' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { description: Personal record not found }
+        '409': { description: The record was not created manually }
+        '503': { description: Personal record service unavailable }
+    patch:
+      summary: Confirm or discard a suggested personal record
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PersonalRecordDecision' }
+      responses:
+        '200':
+          description: Decision persisted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PersonalRecord' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { description: Personal record not found }
+        '409': { description: The record is not a pending suggestion or is not better than the current record }
+        '503': { description: Personal record service unavailable }
   /catalogs/{catalogKey}:
     get:
       summary: List active entries from an application catalog
@@ -121,6 +224,22 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Movement'
+  /catalog/complexes:
+    get:
+      summary: List published movement complexes and their immutable versions
+      responses:
+        '200':
+          description: Published complexes with ordered steps
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [complexes]
+                properties:
+                  complexes:
+                    type: array
+                    items: { $ref: '#/components/schemas/ComplexCatalogEntry' }
+        '503': { description: Catalog service unavailable }
   /integrations/openclaw/training-plans/{externalPlanId}:
     put:
       summary: Publish a complete planning version for the authenticated athlete
@@ -584,3 +703,104 @@ components:
         actualMovementId: { type: string, format: uuid }
         reasonId: { type: string, format: uuid }
         note: { type: string }
+    PersonalRecord:
+      type: object
+      required:
+        - id
+        - status
+        - sourceType
+        - movement
+        - complex
+        - repetitions
+        - loadKg
+        - achievedOn
+        - confirmedAt
+        - note
+        - originAttemptId
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [suggested, confirmed, discarded] }
+        sourceType: { type: string, enum: [attempt, manual_historical] }
+        movement:
+          anyOf:
+            - { $ref: '#/components/schemas/MovementReference' }
+            - { type: 'null' }
+        complex:
+          anyOf:
+            - { $ref: '#/components/schemas/ComplexReference' }
+            - { type: 'null' }
+        repetitions: { type: integer, minimum: 1 }
+        loadKg: { type: number, minimum: 0 }
+        achievedOn: { type: string, format: date }
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        note: { type: [string, 'null'] }
+        originAttemptId:
+          type: [string, 'null']
+          format: uuid
+          description: Source set attempt when it still exists.
+        previousLoadKg:
+          type: [number, 'null']
+          description: Current confirmed load to beat; present in suggestions.
+    PersonalRecordPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PersonalRecord' }
+        nextCursor:
+          type: [string, 'null']
+          description: Opaque cursor for the next page; `null` on the last page.
+    PersonalRecordManualInput:
+      type: object
+      additionalProperties: false
+      required: [repetitions, loadKg, achievedOn]
+      properties:
+        movementId: { type: string, format: uuid }
+        complexVersionId: { type: string, format: uuid }
+        repetitions: { type: integer, minimum: 1 }
+        loadKg: { type: number, minimum: 0 }
+        achievedOn: { type: string, format: date }
+        note: { type: string }
+      oneOf:
+        - required: [movementId]
+        - required: [complexVersionId]
+      not:
+        required: [movementId, complexVersionId]
+    PersonalRecordDecision:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [confirmed, discarded] }
+    ComplexCatalogEntry:
+      type: object
+      required: [id, code, name, versions]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        versions:
+          type: array
+          items: { $ref: '#/components/schemas/ComplexCatalogVersion' }
+    ComplexCatalogVersion:
+      type: object
+      required: [id, versionNumber, publishedAt, steps]
+      properties:
+        id: { type: string, format: uuid }
+        versionNumber: { type: integer, minimum: 1 }
+        publishedAt:
+          type: [string, 'null']
+          format: date-time
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/ComplexCatalogStep' }
+    ComplexCatalogStep:
+      type: object
+      required: [position, repetitions, movement]
+      properties:
+        position: { type: integer, minimum: 1 }
+        repetitions: { type: integer, minimum: 1 }
+        movement: { $ref: '#/components/schemas/MovementReference' }

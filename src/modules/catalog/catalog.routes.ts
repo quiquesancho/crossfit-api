@@ -11,4 +11,8 @@ export function registerCatalogRoutes(app: FastifyInstance, catalogReader?: Cata
     if (!catalogReader) return reply.code(503).send({ code: "database_unavailable" });
     return { movements: await catalogReader.listMovements() };
   });
+  app.get("/api/v1/catalog/complexes", async (_request, reply) => {
+    if (!catalogReader) return reply.code(503).send({ code: "database_unavailable" });
+    return { complexes: await catalogReader.listComplexes() };
+  });
 }

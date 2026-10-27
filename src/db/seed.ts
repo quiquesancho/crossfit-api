@@ -1,7 +1,16 @@
 import { sql } from "drizzle-orm";
 
 import { createDatabase } from "./client.js";
-import { athlete, catalog, catalogEntry, movement, movementFamily } from "./schema.js";
+import {
+  athlete,
+  catalog,
+  catalogEntry,
+  complex,
+  complexStep,
+  complexVersion,
+  movement,
+  movementFamily,
+} from "./schema.js";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -136,10 +145,89 @@ if (!clean) {
   throw new Error("Failed to seed the clean movement family.");
 }
 
-await database
+const [squat] = await database
+  .insert(movementFamily)
+  .values({ code: "squat", name: "Squat" })
+  .onConflictDoUpdate({ target: movementFamily.code, set: { name: sql`excluded.name` } })
+  .returning({ id: movementFamily.id });
+
+if (!squat) {
+  throw new Error("Failed to seed the squat movement family.");
+}
+
+const [powerClean] = await database
   .insert(movement)
   .values({ code: "power-clean", familyId: clean.id, name: "Power clean" })
   .onConflictDoUpdate({
     target: movement.code,
     set: { name: sql`excluded.name`, familyId: sql`excluded.family_id` },
+  })
+  .returning({ id: movement.id });
+
+const [frontSquat] = await database
+  .insert(movement)
+  .values({ code: "front-squat", familyId: squat.id, name: "Front squat" })
+  .onConflictDoUpdate({
+    target: movement.code,
+    set: { name: sql`excluded.name`, familyId: sql`excluded.family_id` },
+  })
+  .returning({ id: movement.id });
+
+if (!powerClean || !frontSquat) {
+  throw new Error("Failed to seed the example movements.");
+}
+
+const [cleanComplex] = await database
+  .insert(complex)
+  .values({ code: "clean-complex", name: "Clean complex" })
+  .onConflictDoUpdate({ target: complex.code, set: { name: sql`excluded.name` } })
+  .returning({ id: complex.id });
+
+if (!cleanComplex) {
+  throw new Error("Failed to seed the clean complex.");
+}
+
+const [cleanComplexVersion] = await database
+  .insert(complexVersion)
+  .values({
+    complexId: cleanComplex.id,
+    versionNumber: 1,
+    status: "published",
+    publishedAt: sql`now()`,
+  })
+  .onConflictDoUpdate({
+    target: [complexVersion.complexId, complexVersion.versionNumber],
+    set: {
+      status: "published",
+      publishedAt: sql`coalesce(complex_version.published_at, now())`,
+    },
+  })
+  .returning({ id: complexVersion.id });
+
+if (!cleanComplexVersion) {
+  throw new Error("Failed to seed the clean complex version.");
+}
+
+await database
+  .insert(complexStep)
+  .values([
+    {
+      complexVersionId: cleanComplexVersion.id,
+      position: 1,
+      movementId: powerClean.id,
+      repetitions: 1,
+    },
+    {
+      complexVersionId: cleanComplexVersion.id,
+      position: 2,
+      movementId: frontSquat.id,
+      repetitions: 1,
+    },
+  ])
+  .onConflictDoUpdate({
+    target: [complexStep.complexVersionId, complexStep.position],
+    set: {
+      movementId: sql`excluded.movement_id`,
+      repetitions: sql`excluded.repetitions`,
+    },
   });
