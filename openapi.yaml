@@ -185,6 +185,34 @@ paths:
         '404': { description: Personal record not found }
         '409': { description: The record is not a pending suggestion or is not better than the current record }
         '503': { description: Personal record service unavailable }
+  /progress/volume:
+    get:
+      summary: Get accumulated training volume for the current athlete
+      description: >-
+        Aggregates completed set attempts from completed sessions. Technical volume
+        only includes attempts performed in blocks whose type code is `technique`.
+        Complex attempts are not attributed to a movement and are therefore excluded
+        from this movement/family breakdown.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: groupBy
+          in: query
+          schema: { type: string, enum: [movement, family], default: movement }
+      responses:
+        '200':
+          description: Volume totals and a movement or family breakdown
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VolumeResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '503': { description: Progress query service unavailable }
   /catalogs/{catalogKey}:
     get:
       summary: List active entries from an application catalog
@@ -664,6 +692,11 @@ components:
         note: { type: string }
         weight: { $ref: '#/components/schemas/ActualWeightWrite' }
         repetitions: { type: integer, minimum: 0 }
+        durationSeconds:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 86400
+          description: Optional technical-practice duration for this set or attempt.
       oneOf:
         - required: [plannedPrescriptionId]
         - required: [movementId]
@@ -703,6 +736,57 @@ components:
         actualMovementId: { type: string, format: uuid }
         reasonId: { type: string, format: uuid }
         note: { type: string }
+    MovementFamilyReference:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: clean }
+        name: { type: string, example: Clean }
+    VolumeAggregate:
+      type: object
+      required:
+        - repetitions
+        - technicalRepetitions
+        - durationSeconds
+        - technicalDurationSeconds
+        - volumeKg
+        - technicalVolumeKg
+        - sessions
+        - lastPracticedOn
+      properties:
+        repetitions: { type: integer, minimum: 0 }
+        technicalRepetitions: { type: integer, minimum: 0 }
+        durationSeconds: { type: number, minimum: 0 }
+        technicalDurationSeconds: { type: number, minimum: 0 }
+        volumeKg: { type: number, minimum: 0 }
+        technicalVolumeKg: { type: number, minimum: 0 }
+        sessions: { type: integer, minimum: 0 }
+        lastPracticedOn:
+          type: [string, 'null']
+          format: date
+    VolumeItem:
+      allOf:
+        - { $ref: '#/components/schemas/VolumeAggregate' }
+        - type: object
+          required: [movement, family]
+          properties:
+            movement:
+              anyOf:
+                - { $ref: '#/components/schemas/MovementReference' }
+                - { type: 'null' }
+            family: { $ref: '#/components/schemas/MovementFamilyReference' }
+    VolumeResponse:
+      type: object
+      required: [from, to, groupBy, totals, items]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        groupBy: { type: string, enum: [movement, family] }
+        totals: { $ref: '#/components/schemas/VolumeAggregate' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/VolumeItem' }
     PersonalRecord:
       type: object
       required:

@@ -8,6 +8,7 @@ import { createPersonalRecordReader } from "./modules/personal-records/personal-
 import { createPersonalRecordWriter } from "./modules/personal-records/personal-records.writer.js";
 import { createPlanningPublisher } from "./modules/planning/planning.publisher.js";
 import { createPlanningWeekReader } from "./modules/planning/planning.repository.js";
+import { createProgressReader } from "./modules/progress/progress.repository.js";
 
 const config = loadConfig();
 const database = config.databaseUrl ? createDatabase(config.databaseUrl) : undefined;
@@ -19,6 +20,7 @@ const app = buildApp({
   executionHistoryReader: database ? createExecutionHistoryReader(database) : undefined,
   personalRecordReader: database ? createPersonalRecordReader(database) : undefined,
   personalRecordWriter: database ? createPersonalRecordWriter(database) : undefined,
+  progressReader: database ? createProgressReader(database) : undefined,
   openClawServiceKey: config.openClawServiceKey,
 });
 

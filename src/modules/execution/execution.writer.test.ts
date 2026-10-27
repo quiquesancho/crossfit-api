@@ -457,6 +457,7 @@ describe("session execution writer", () => {
               status: "completed",
               weight: { amount: 60, unit: "kg" },
               repetitions: 4,
+              durationSeconds: 120,
               note: "Técnica sólida.",
             },
             {
@@ -523,6 +524,13 @@ describe("session execution writer", () => {
         metricType: "repetitions",
         numericValue: 4,
         unit: "count",
+      },
+      {
+        athleteId: "athlete-id",
+        setAttemptId: "019b4e0a-0000-7000-8000-000000000071",
+        metricType: "duration",
+        numericValue: 120,
+        unit: "s",
       },
     ]);
   });

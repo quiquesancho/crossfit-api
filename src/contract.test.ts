@@ -11,6 +11,7 @@ import type {
   PersonalRecordReader,
   PersonalRecordWriter,
 } from "./modules/personal-records/personal-records.types.js";
+import type { ProgressReader } from "./modules/progress/progress.types.js";
 
 const CONTRACT_ID = "urn:crossfit:openapi";
 
@@ -310,6 +311,46 @@ const personalRecordWriter = {
   createManual: async () => personalRecord,
   decide: async () => personalRecord,
 } satisfies PersonalRecordWriter;
+const progressResponse = {
+  from: "2026-10-01",
+  to: "2026-10-31",
+  groupBy: "movement" as const,
+  totals: {
+    repetitions: 120,
+    technicalRepetitions: 80,
+    durationSeconds: 300,
+    technicalDurationSeconds: 240,
+    volumeKg: 5400,
+    technicalVolumeKg: 3200,
+    sessions: 4,
+    lastPracticedOn: "2026-10-30",
+  },
+  items: [
+    {
+      movement: {
+        id: "019b4e0a-0000-7000-8000-000000000010",
+        code: "power-clean",
+        name: "Power clean",
+      },
+      family: {
+        id: "019b4e0a-0000-7000-8000-000000000011",
+        code: "clean",
+        name: "Clean",
+      },
+      repetitions: 40,
+      technicalRepetitions: 24,
+      durationSeconds: 0,
+      technicalDurationSeconds: 0,
+      volumeKg: 3400,
+      technicalVolumeKg: 2040,
+      sessions: 3,
+      lastPracticedOn: "2026-10-30",
+    },
+  ],
+};
+const progressReader = {
+  getVolume: async () => progressResponse,
+} satisfies ProgressReader;
 const manualPersonalRecord = {
   movementId: "019b4e0a-0000-7000-8000-000000000010",
   repetitions: 2,
@@ -330,6 +371,7 @@ describe("openapi contract document", () => {
         "/personal-records/current",
         "/personal-records/suggestions",
         "/personal-records/{recordId}",
+        "/progress/volume",
       ]),
     );
   });
@@ -436,6 +478,21 @@ describe("personal record responses conform to the contract", () => {
   });
 });
 
+describe("progress responses conform to the contract", () => {
+  const app = buildApp({ progressReader });
+  afterAll(async () => app.close());
+
+  it("GET /progress/volume", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/progress/volume?from=2026-10-01&to=2026-10-31",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(responseValidator("/progress/volume", "get", 200), response.json());
+  });
+});
+
 describe("planning responses conform to the contract", () => {
   const app = buildApp({ planningPublisher, planningWeekReader, openClawServiceKey: "test-secret" });
   afterAll(async () => app.close());
@@ -527,6 +584,30 @@ describe("execution synchronization conforms to the contract", () => {
               },
             ],
           },
+        },
+      ],
+    };
+
+    expectValid(requestValidator("/session-executions/{executionId}", "put"), snapshot);
+  });
+
+  it("accepts a technical practice duration on a set attempt", () => {
+    const snapshot = {
+      ...structuredClone(executionSnapshot),
+      blocks: [
+        {
+          ...executionSnapshot.blocks[0]!,
+          status: "completed" as const,
+          attempts: [
+            {
+              id: "019b4e0a-0000-7000-8000-000000000071",
+              plannedPrescriptionId: "019b4e0a-0000-4000-8000-000000000043",
+              position: 1,
+              status: "completed" as const,
+              repetitions: 3,
+              durationSeconds: 90,
+            },
+          ],
         },
       ],
     };
