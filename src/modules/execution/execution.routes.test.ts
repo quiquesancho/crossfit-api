@@ -198,6 +198,7 @@ describe("execution snapshot validation", () => {
         status: "completed",
         weight: { amount: 60, unit: "kg" },
         repetitions: 4,
+        durationSeconds: 90,
         note: "Buena serie.",
       },
     ];
@@ -218,6 +219,7 @@ describe("execution snapshot validation", () => {
         position: 0,
         status: "done" as never,
         repetitions: -1,
+        durationSeconds: 0,
         weight: { amount: 0, unit: "" },
         unsupported: true,
       } as never,
@@ -240,6 +242,7 @@ describe("execution snapshot validation", () => {
           expect.objectContaining({ path: "blocks[0].attempts[0].position" }),
           expect.objectContaining({ path: "blocks[0].attempts[0].status" }),
           expect.objectContaining({ path: "blocks[0].attempts[0].repetitions" }),
+          expect.objectContaining({ path: "blocks[0].attempts[0].durationSeconds" }),
           expect.objectContaining({ path: "blocks[0].attempts[0].weight.amount" }),
           expect.objectContaining({ path: "blocks[0].attempts[0].unsupported" }),
           expect.objectContaining({ path: "blocks[0].attempts[0]" }),

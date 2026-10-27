@@ -337,13 +337,17 @@ export const typedMetric = pgTable(
     ),
     check(
       "typed_metric_metric_type_check",
-      sql`${table.metricType} in ('rounds', 'extra-repetitions', 'repetitions', 'weight', 'load-status')`,
+      sql`${table.metricType} in ('rounds', 'extra-repetitions', 'repetitions', 'weight', 'load-status', 'duration')`,
     ),
-    check("typed_metric_unit_check", sql`${table.unit} in ('count', 'kg', 'lb', 'status')`),
+    check("typed_metric_unit_check", sql`${table.unit} in ('count', 'kg', 'lb', 'status', 's')`),
     check("typed_metric_numeric_value_check", sql`${table.numericValue} >= 0`),
     check(
       "typed_metric_weight_value_check",
       sql`${table.metricType} <> 'weight' or ${table.numericValue} > 0`,
+    ),
+    check(
+      "typed_metric_duration_value_check",
+      sql`${table.metricType} <> 'duration' or ${table.numericValue} > 0`,
     ),
     check(
       "typed_metric_count_value_check",

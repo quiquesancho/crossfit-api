@@ -39,6 +39,7 @@ const ATTEMPT_KEYS = new Set([
   "note",
   "weight",
   "repetitions",
+  "durationSeconds",
 ]);
 const WEIGHT_KEYS = new Set(["amount", "unit"]);
 const FEELING_KEYS = new Set([
@@ -313,6 +314,18 @@ function validateAttempt(
       value.repetitions < 0)
   ) {
     issues.push({ path: `${path}.repetitions`, message: "Must be a non-negative integer." });
+  }
+  if (
+    value.durationSeconds !== undefined &&
+    (typeof value.durationSeconds !== "number" ||
+      !Number.isFinite(value.durationSeconds) ||
+      value.durationSeconds <= 0 ||
+      value.durationSeconds > 86_400)
+  ) {
+    issues.push({
+      path: `${path}.durationSeconds`,
+      message: "Must be a positive number of seconds, at most 86400.",
+    });
   }
   return true;
 }

@@ -13,6 +13,8 @@ import type {
 } from "./modules/personal-records/personal-records.types.js";
 import { registerPlanningRoutes } from "./modules/planning/planning.routes.js";
 import type { PlanningPublisher, PlanningWeekReader } from "./modules/planning/planning.types.js";
+import { registerProgressRoutes } from "./modules/progress/progress.routes.js";
+import type { ProgressReader } from "./modules/progress/progress.types.js";
 
 export function buildApp(
   dependencies: {
@@ -23,6 +25,7 @@ export function buildApp(
     executionHistoryReader?: ExecutionHistoryReader;
     personalRecordReader?: PersonalRecordReader;
     personalRecordWriter?: PersonalRecordWriter;
+    progressReader?: ProgressReader;
     openClawServiceKey?: string;
   } = {},
 ) {
@@ -37,5 +40,6 @@ export function buildApp(
     dependencies.personalRecordReader,
     dependencies.personalRecordWriter,
   );
+  registerProgressRoutes(app, dependencies.progressReader);
   return app;
 }

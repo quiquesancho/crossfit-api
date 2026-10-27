@@ -57,6 +57,7 @@ function cleanAttempt(attempt: SetAttemptSnapshot): SetAttemptSnapshot {
   if (attempt.note !== undefined) cleaned.note = attempt.note;
   if (attempt.weight !== undefined) cleaned.weight = { ...attempt.weight };
   if (attempt.repetitions !== undefined) cleaned.repetitions = attempt.repetitions;
+  if (attempt.durationSeconds !== undefined) cleaned.durationSeconds = attempt.durationSeconds;
   return cleaned;
 }
 

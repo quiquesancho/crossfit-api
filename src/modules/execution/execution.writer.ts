@@ -192,6 +192,15 @@ function attemptMetricValues(athleteId: string, attempt: SetAttemptSnapshot) {
       unit: "count",
     });
   }
+  if (attempt.durationSeconds !== undefined) {
+    values.push({
+      athleteId,
+      setAttemptId: attempt.id,
+      metricType: "duration",
+      numericValue: attempt.durationSeconds,
+      unit: "s",
+    });
+  }
   return values;
 }
 
