@@ -21,6 +21,7 @@ describe("catalog endpoints", () => {
     listMovements: async () => [
       { id: "019b4e0a-0000-7000-8000-000000000010", code: "power-clean", name: "Power clean", familyCode: "clean" },
     ],
+    listComplexes: async () => [],
   };
   const catalogApp = buildApp({ catalogReader });
 

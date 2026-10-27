@@ -7,6 +7,10 @@ import { parse } from "yaml";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "./app.js";
+import type {
+  PersonalRecordReader,
+  PersonalRecordWriter,
+} from "./modules/personal-records/personal-records.types.js";
 
 const CONTRACT_ID = "urn:crossfit:openapi";
 
@@ -72,6 +76,31 @@ const catalogReader = {
   ],
   listMovements: async () => [
     { id: "019b4e0a-0000-7000-8000-000000000010", code: "power-clean", name: "Power clean", familyCode: "clean" },
+  ],
+  listComplexes: async () => [
+    {
+      id: "019b4e0a-0000-7000-8000-000000000020",
+      code: "clean-complex",
+      name: "Clean complex",
+      versions: [
+        {
+          id: "019b4e0a-0000-7000-8000-000000000021",
+          versionNumber: 1,
+          publishedAt: "2026-10-18T12:00:00.000Z",
+          steps: [
+            {
+              position: 1,
+              repetitions: 1,
+              movement: {
+                id: "019b4e0a-0000-7000-8000-000000000010",
+                code: "power-clean",
+                name: "Power clean",
+              },
+            },
+          ],
+        },
+      ],
+    },
   ],
 };
 
@@ -254,11 +283,54 @@ const sessionExecutionWriter = {
   }),
 };
 
+const personalRecord = {
+  id: "019b4e0a-0000-7000-8000-000000000301",
+  status: "suggested" as const,
+  sourceType: "attempt" as const,
+  movement: {
+    id: "019b4e0a-0000-7000-8000-000000000010",
+    code: "power-clean",
+    name: "Power clean",
+  },
+  complex: null,
+  repetitions: 2,
+  loadKg: 85,
+  achievedOn: "2026-10-20",
+  confirmedAt: null,
+  note: null,
+  originAttemptId: "019b4e0a-0000-7000-8000-000000000201",
+  previousLoadKg: 80,
+};
+const personalRecordReader = {
+  list: async () => ({ items: [personalRecord], nextCursor: null }),
+  listCurrent: async () => [personalRecord],
+  listSuggestions: async () => [personalRecord],
+} satisfies PersonalRecordReader;
+const personalRecordWriter = {
+  createManual: async () => personalRecord,
+  decide: async () => personalRecord,
+} satisfies PersonalRecordWriter;
+const manualPersonalRecord = {
+  movementId: "019b4e0a-0000-7000-8000-000000000010",
+  repetitions: 2,
+  loadKg: 85,
+  achievedOn: "2026-10-20",
+  note: "Primera vez",
+};
+
 describe("openapi contract document", () => {
   it("declares the version and the implemented paths", () => {
     expect(contract.openapi).toBe("3.1.0");
     expect(Object.keys(contract.paths)).toEqual(
-      expect.arrayContaining(["/catalogs/{catalogKey}", "/catalog/movements"]),
+      expect.arrayContaining([
+        "/catalogs/{catalogKey}",
+        "/catalog/movements",
+        "/catalog/complexes",
+        "/personal-records",
+        "/personal-records/current",
+        "/personal-records/suggestions",
+        "/personal-records/{recordId}",
+      ]),
     );
   });
 });
@@ -279,6 +351,88 @@ describe("catalog responses conform to the contract", () => {
 
     expect(response.statusCode).toBe(200);
     expectValid(responseValidator("/catalog/movements", "get", 200), response.json());
+  });
+
+  it("GET /catalog/complexes", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/v1/catalog/complexes" });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(responseValidator("/catalog/complexes", "get", 200), response.json());
+  });
+});
+
+describe("personal record responses conform to the contract", () => {
+  const app = buildApp({
+    personalRecordReader,
+    personalRecordWriter,
+  });
+  afterAll(async () => app.close());
+
+  it("GET /personal-records", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/v1/personal-records" });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(responseValidator("/personal-records", "get", 200), response.json());
+  });
+
+  it("GET /personal-records/current", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/personal-records/current",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(
+      responseValidator("/personal-records/current", "get", 200),
+      response.json(),
+    );
+  });
+
+  it("GET /personal-records/suggestions", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/personal-records/suggestions",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(
+      responseValidator("/personal-records/suggestions", "get", 200),
+      response.json(),
+    );
+  });
+
+  it("PUT /personal-records/{recordId}", async () => {
+    expectValid(
+      requestValidator("/personal-records/{recordId}", "put"),
+      manualPersonalRecord,
+    );
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/v1/personal-records/${personalRecord.id}`,
+      payload: manualPersonalRecord,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(
+      responseValidator("/personal-records/{recordId}", "put", 200),
+      response.json(),
+    );
+  });
+
+  it("PATCH /personal-records/{recordId}", async () => {
+    const decision = { status: "confirmed" };
+    expectValid(requestValidator("/personal-records/{recordId}", "patch"), decision);
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/personal-records/${personalRecord.id}`,
+      payload: decision,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(
+      responseValidator("/personal-records/{recordId}", "patch", 200),
+      response.json(),
+    );
   });
 });
 

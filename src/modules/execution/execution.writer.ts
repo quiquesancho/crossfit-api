@@ -23,6 +23,12 @@ import {
 import { hashSessionExecution } from "./execution.hash.js";
 import { normalizedSnapshot } from "./execution.snapshot.js";
 import {
+  capturePersonalRecordLinks,
+  deleteSuggestedPersonalRecords,
+  generatePersonalRecordSuggestions,
+  restorePersonalRecordLinks,
+} from "../personal-records/personal-records.suggestions.js";
+import {
   ExecutionLocalAthleteNotFoundError,
   ExecutionRevisionConflictError,
   ExecutionValidationError,
@@ -529,7 +535,11 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
           updatedAt: now,
           annulledAt: content.status === "annulled" ? now : null,
         };
+        const personalRecordLinks = existing
+          ? await capturePersonalRecordLinks(tx, executionId)
+          : [];
         if (existing) {
+          await deleteSuggestedPersonalRecords(tx, personalRecordLinks);
           await tx.update(sessionExecution).set(executionValues).where(eq(sessionExecution.id, executionId));
           await tx.delete(blockExecution).where(eq(blockExecution.sessionExecutionId, executionId));
           await tx.delete(feeling).where(eq(feeling.sessionExecutionId, executionId));
@@ -563,6 +573,25 @@ export function createSessionExecutionWriter(database: Database): SessionExecuti
             })),
           );
         }
+        await restorePersonalRecordLinks(
+          tx,
+          personalRecordLinks,
+          new Set(resolvedAttempts.map(({ attempt }) => attempt.id)),
+        );
+        await generatePersonalRecordSuggestions(tx, {
+          athleteId: localAthlete.id,
+          executionDate: content.executionDate,
+          executionStatus: content.status,
+          attempts: resolvedAttempts.map(({ attempt, movementId, complexVersionId }) => ({
+            id: attempt.id,
+            movementId: movementId ?? undefined,
+            complexVersionId: complexVersionId ?? undefined,
+            status: attempt.status,
+            position: attempt.position,
+            repetitions: attempt.repetitions,
+            weight: attempt.weight,
+          })),
+        });
         const metrics = [
           ...content.blocks.flatMap((block) => typedMetricValues(localAthlete.id, block)),
           ...resolvedAttempts.flatMap(({ attempt }) =>

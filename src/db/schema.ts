@@ -414,3 +414,55 @@ export const substitution = pgTable(
     index("substitution_actual_movement_idx").on(table.actualMovementId),
   ],
 );
+
+export const personalRecord = pgTable(
+  "personal_record",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    athleteId: uuid("athlete_id").notNull().references(() => athlete.id),
+    setAttemptId: uuid("set_attempt_id").references(() => setAttempt.id, { onDelete: "set null" }),
+    movementId: uuid("movement_id").references(() => movement.id),
+    complexVersionId: uuid("complex_version_id").references(() => complexVersion.id),
+    repetitions: integer("repetitions").notNull(),
+    loadKg: numeric("load_kg", { precision: 10, scale: 3, mode: "number" }).notNull(),
+    achievedOn: date("achieved_on", { mode: "string" }).notNull(),
+    status: text("status").notNull(),
+    sourceType: text("source_type").notNull(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("personal_record_attempt_idx")
+      .on(table.setAttemptId)
+      .where(sql`${table.setAttemptId} is not null`),
+    index("personal_record_athlete_status_idx").on(table.athleteId, table.status),
+    index("personal_record_athlete_movement_idx").on(
+      table.athleteId,
+      table.movementId,
+      table.repetitions,
+    ),
+    index("personal_record_athlete_complex_idx").on(
+      table.athleteId,
+      table.complexVersionId,
+      table.repetitions,
+    ),
+    index("personal_record_athlete_date_idx").on(table.athleteId, table.achievedOn),
+    check("personal_record_anchor_check", sql`num_nonnulls(${table.movementId}, ${table.complexVersionId}) = 1`),
+    check("personal_record_repetitions_check", sql`${table.repetitions} > 0`),
+    check("personal_record_load_check", sql`${table.loadKg} >= 0`),
+    check(
+      "personal_record_status_check",
+      sql`${table.status} in ('suggested', 'confirmed', 'discarded')`,
+    ),
+    check(
+      "personal_record_source_check",
+      sql`${table.sourceType} in ('attempt', 'manual_historical')`,
+    ),
+    check(
+      "personal_record_confirmed_at_check",
+      sql`(${table.status} = 'confirmed') = (${table.confirmedAt} is not null)`,
+    ),
+  ],
+);
