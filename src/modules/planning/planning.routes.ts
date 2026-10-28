@@ -1,7 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
-
 import type { FastifyInstance } from "fastify";
 
+import { validServiceKey } from "../../shared/service-key.js";
 import {
   LocalAthleteNotFoundError,
   PlanningValidationError,
@@ -10,13 +9,6 @@ import {
   type PlanningWeekReader,
 } from "./planning.types.js";
 import { isIsoWeekStart, validatePlanningPublication } from "./planning.validation.js";
-
-function validServiceKey(received: unknown, expected: string): boolean {
-  if (typeof received !== "string") return false;
-  const receivedBuffer = Buffer.from(received);
-  const expectedBuffer = Buffer.from(expected);
-  return receivedBuffer.length === expectedBuffer.length && timingSafeEqual(receivedBuffer, expectedBuffer);
-}
 
 export function registerPlanningRoutes(
   app: FastifyInstance,

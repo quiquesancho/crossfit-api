@@ -78,6 +78,9 @@ const catalogReader = {
   listMovements: async () => [
     { id: "019b4e0a-0000-7000-8000-000000000010", code: "power-clean", name: "Power clean", familyCode: "clean" },
   ],
+  listMovementFamilies: async () => [
+    { id: "019b4e0a-0000-7000-8000-000000000009", code: "clean", name: "Clean" },
+  ],
   listComplexes: async () => [
     {
       id: "019b4e0a-0000-7000-8000-000000000020",
@@ -366,12 +369,14 @@ describe("openapi contract document", () => {
       expect.arrayContaining([
         "/catalogs/{catalogKey}",
         "/catalog/movements",
+        "/catalog/movement-families",
         "/catalog/complexes",
         "/personal-records",
         "/personal-records/current",
         "/personal-records/suggestions",
         "/personal-records/{recordId}",
         "/progress/volume",
+        "/integrations/openclaw/movement-catalog",
       ]),
     );
   });
@@ -393,6 +398,13 @@ describe("catalog responses conform to the contract", () => {
 
     expect(response.statusCode).toBe(200);
     expectValid(responseValidator("/catalog/movements", "get", 200), response.json());
+  });
+
+  it("GET /catalog/movement-families", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/v1/catalog/movement-families" });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(responseValidator("/catalog/movement-families", "get", 200), response.json());
   });
 
   it("GET /catalog/complexes", async () => {
@@ -490,6 +502,41 @@ describe("progress responses conform to the contract", () => {
 
     expect(response.statusCode).toBe(200);
     expectValid(responseValidator("/progress/volume", "get", 200), response.json());
+  });
+});
+
+describe("movement catalog import conforms to the contract", () => {
+  const movementCatalogImport = {
+    families: [{ code: "clean", name: "Clean" }],
+    movements: [{ code: "power-clean", name: "Power clean", familyCode: "clean" }],
+  };
+  const movementCatalogWriter = {
+    importCatalog: async () => ({
+      status: "applied" as const,
+      families: { created: 1, updated: 0, unchanged: 0 },
+      movements: { created: 1, updated: 0, unchanged: 0 },
+    }),
+  };
+  const app = buildApp({ movementCatalogWriter, openClawServiceKey: "test-secret" });
+  afterAll(async () => app.close());
+
+  it("PUT /integrations/openclaw/movement-catalog", async () => {
+    expectValid(
+      requestValidator("/integrations/openclaw/movement-catalog", "put"),
+      movementCatalogImport,
+    );
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/v1/integrations/openclaw/movement-catalog",
+      headers: { "x-openclaw-service-key": "test-secret" },
+      payload: movementCatalogImport,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectValid(
+      responseValidator("/integrations/openclaw/movement-catalog", "put", 200),
+      response.json(),
+    );
   });
 });
 
