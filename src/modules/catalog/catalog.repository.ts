@@ -50,6 +50,13 @@ export function createCatalogReader(database: Database) {
         .where(and(isNull(movement.archivedAt), isNull(movementFamily.archivedAt)))
         .orderBy(asc(movement.name));
     },
+    async listMovementFamilies() {
+      return database
+        .select({ id: movementFamily.id, code: movementFamily.code, name: movementFamily.name })
+        .from(movementFamily)
+        .where(isNull(movementFamily.archivedAt))
+        .orderBy(asc(movementFamily.name));
+    },
     async listComplexes(): Promise<ComplexCatalogEntry[]> {
       const rows = await database
         .select({

@@ -21,6 +21,9 @@ describe("catalog endpoints", () => {
     listMovements: async () => [
       { id: "019b4e0a-0000-7000-8000-000000000010", code: "power-clean", name: "Power clean", familyCode: "clean" },
     ],
+    listMovementFamilies: async () => [
+      { id: "019b4e0a-0000-7000-8000-000000000009", code: "clean", name: "Clean" },
+    ],
     listComplexes: async () => [],
   };
   const catalogApp = buildApp({ catalogReader });
@@ -39,6 +42,16 @@ describe("catalog endpoints", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ movements: await catalogReader.listMovements() });
+  });
+
+  it("lists active movement families", async () => {
+    const response = await catalogApp.inject({
+      method: "GET",
+      url: "/api/v1/catalog/movement-families",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ families: await catalogReader.listMovementFamilies() });
   });
 });
 
@@ -69,5 +82,17 @@ describe("catalog reader", () => {
     const reader = createCatalogReader({ select: () => query } as unknown as Database);
 
     await expect(reader.listMovements()).resolves.toEqual(rows);
+  });
+
+  it("maps movement families from the database query", async () => {
+    const rows = [{ id: "019b4e0a-0000-7000-8000-000000000009", code: "clean", name: "Clean" }];
+    const query = {
+      from: () => query,
+      where: () => query,
+      orderBy: async () => rows,
+    };
+    const reader = createCatalogReader({ select: () => query } as unknown as Database);
+
+    await expect(reader.listMovementFamilies()).resolves.toEqual(rows);
   });
 });

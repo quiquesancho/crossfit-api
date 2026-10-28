@@ -252,6 +252,24 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Movement'
+        '503': { description: Catalog service unavailable }
+  /catalog/movement-families:
+    get:
+      summary: List active movement families
+      responses:
+        '200':
+          description: Active movement family catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [families]
+                properties:
+                  families:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MovementFamily'
+        '503': { description: Catalog service unavailable }
   /catalog/complexes:
     get:
       summary: List published movement complexes and their immutable versions
@@ -268,6 +286,38 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/ComplexCatalogEntry' }
         '503': { description: Catalog service unavailable }
+  /integrations/openclaw/movement-catalog:
+    put:
+      summary: Import or update movement families and movements
+      description: >-
+        Idempotent transactional upsert authenticated with the OpenClaw service
+        credential. At least one family or movement must be provided. Codes are
+        stable kebab-case identifiers. Existing movements cannot change family;
+        create a new code and archive the old one instead. Entries omitted from
+        the payload are never deleted or archived.
+      security:
+        - OpenClawServiceKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MovementCatalogImport'
+      responses:
+        '200':
+          description: Catalog import applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementCatalogImportResult'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { description: Missing or invalid service credential }
+        '409':
+          description: >-
+            Archived family or movement, or an existing movement that belongs to
+            another family. Response codes: `family_archived`,
+            `movement_archived`, `movement_family_conflict`.
+        '503': { description: Movement catalog import service unavailable }
   /integrations/openclaw/training-plans/{externalPlanId}:
     put:
       summary: Publish a complete planning version for the authenticated athlete
@@ -367,6 +417,86 @@ components:
         code: { type: string, example: power-clean }
         name: { type: string, example: Power clean }
         familyCode: { type: string, example: clean }
+    MovementFamily:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: clean }
+        name: { type: string, example: Clean }
+    MovementFamilyImport:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          maxLength: 80
+          example: clean
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Clean
+    MovementImport:
+      type: object
+      additionalProperties: false
+      required: [code, name, familyCode]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          maxLength: 80
+          example: power-clean
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Power clean
+        familyCode:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          maxLength: 80
+          example: clean
+    MovementCatalogImport:
+      type: object
+      additionalProperties: false
+      description: >-
+        At least one family or movement must be present. Duplicate codes within
+        the same array are rejected.
+      properties:
+        families:
+          type: array
+          maxItems: 500
+          items: { $ref: '#/components/schemas/MovementFamilyImport' }
+        movements:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/MovementImport' }
+      anyOf:
+        - required: [families]
+          properties:
+            families:
+              minItems: 1
+        - required: [movements]
+          properties:
+            movements:
+              minItems: 1
+    MovementCatalogImportCounts:
+      type: object
+      required: [created, updated, unchanged]
+      properties:
+        created: { type: integer, minimum: 0 }
+        updated: { type: integer, minimum: 0 }
+        unchanged: { type: integer, minimum: 0 }
+    MovementCatalogImportResult:
+      type: object
+      required: [status, families, movements]
+      properties:
+        status: { type: string, const: applied }
+        families: { $ref: '#/components/schemas/MovementCatalogImportCounts' }
+        movements: { $ref: '#/components/schemas/MovementCatalogImportCounts' }
     CatalogEntry:
       type: object
       required: [id, code, description]
